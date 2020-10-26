@@ -10,6 +10,9 @@ from torch.utils.data import DataLoader
 import time
 import numpy as np
 
+if os.environ.get('USE_IPEX') == "1":
+    import intel_pytorch_extension as ipex
+
 
 def parse_args():
     parser = ArgumentParser(description="Train Single Shot MultiBox Detector"
@@ -21,16 +24,30 @@ def parse_args():
     parser.add_argument('--seed', '-s', type=int,
                         help='manually set random seed for torch')
     parser.add_argument('--device', '-did', type=int,
-                        help='device id')                    
+                        help='device id')
     parser.add_argument('--threshold', '-t', type=float, default=0.20,
                         help='stop training early at threshold')
     parser.add_argument('--checkpoint', type=str, default='./pretrained/resnet34-ssd1200.pth',
                         help='path to model checkpoint file')
     parser.add_argument('--image-size', default=[1200,1200], type=int, nargs='+',
-                        help='input image sizes (e.g 1400 1400,1200 1200')  
+                        help='input image sizes (e.g 1400 1400,1200 1200')
     parser.add_argument('--strides', default=[3,3,2,2,2,2], type=int, nargs='+',
-                        help='stides for ssd model must include 6 numbers')                                       
-    parser.add_argument('--use-fp16', action='store_true')                          
+                        help='stides for ssd model must include 6 numbers')
+    parser.add_argument('--use-fp16', action='store_true')
+    parser.add_argument('--ipex', action='store_true', default=False,
+                        help='use intel pytorch extension')
+    parser.add_argument('--int8', action='store_true', default=False,
+                        help='enable ipex int8 path')
+    parser.add_argument('--jit', action='store_true', default=False,
+                        help='enable ipex jit path')
+    parser.add_argument('--calibration', action='store_true', default=False,
+                        help='doing int8 calibration step')
+    parser.add_argument('--configure-dir', default='configure.json', type=str, metavar='PATH',
+                        help='path to int8 configures, default file name is configure.json')
+    parser.add_argument("--dummy", action='store_true',
+                        help="using  dummu data to test the performance of inference")
+    parser.add_argument('-w', '--warmup-iterations', default=30, type=int, metavar='N',
+                        help='number of warmup iterati ons to run')
     return parser.parse_args()
 
 
@@ -48,47 +65,131 @@ def dboxes_R34_coco(figsize,strides):
     print('Features size: ', feat_size)
     steps=[(int(figsize[0]/fs[0]),int(figsize[1]/fs[1])) for fs in feat_size]
     # use the scales here: https://github.com/amdegroot/ssd.pytorch/blob/master/data/config.py
-    scales = [(int(s*figsize[0]/300),int(s*figsize[1]/300)) for s in [21, 45, 99, 153, 207, 261, 315]] 
-    aspect_ratios =  [[2], [2, 3], [2, 3], [2, 3], [2], [2]] 
+    scales = [(int(s*figsize[0]/300),int(s*figsize[1]/300)) for s in [21, 45, 99, 153, 207, 261, 315]]
+    aspect_ratios =  [[2], [2, 3], [2, 3], [2, 3], [2], [2]]
     dboxes = DefaultBoxes(figsize, feat_size, steps, scales, aspect_ratios)
     return dboxes
-    
-def coco_eval(model, coco, cocoGt, encoder, inv_map, threshold,device=0,use_cuda=False):
+
+def coco_eval(model, coco, cocoGt, encoder, inv_map, args):
     from pycocotools.cocoeval import COCOeval
+    device = args.device
+    threshold = args.threshold
+    use_cuda = not args.no_cuda and torch.cuda.is_available()
     model.eval()
-    if use_cuda:
-        model = model.to('cuda')
+
     ret = []
     start = time.time()
-    for idx, image_id in enumerate(coco.img_keys):
-        img, (htot, wtot), _, _ = coco[idx]
+    ss = 0
+    if args.ipex and args.int8:
+        if args.calibration:
+            print("runing int8 calibration step\n")
+            conf = ipex.AmpConf(torch.int8)
+            for idx, image_id in enumerate(coco.img_keys):
+                img, (htot, wtot), _, _ = coco[idx]
+                ss += 1
+                with torch.no_grad():
+                    print('ddddddddddddddddddddddddddddddd')
+                    with ipex.AutoMixedPrecision(conf, running_mode="calibration"):
+                        print("Parsing image: {}/{}".format(idx+1, len(coco)), end="\r")
+                        #print(img.size())
+                        inp = img.unsqueeze(0)
+                        inp = inp.to(ipex.DEVICE)
+                        start_time=time.time()
+                        ploc, plabel,_ = model(inp)
+                        time.time()-start_time
+                        print('Mode inference time: ', time.time()-start_time)
+                        try:
+                            result = encoder.decode_batch(ploc.to('cpu'), plabel.to('cpu'), 0.50, 200,device=device)[0]
+                        except:
+                            #raise
+                            print("No object detected in idx: {}".format(idx))
+                            continue
+                        print('Decoding time: ', time.time()-start_time)
+                        loc, label, prob = [r.cpu().numpy() for r in result]
 
-        with torch.no_grad():
-            print("Parsing image: {}/{}".format(idx+1, len(coco)), end="\r")
-            inp = img.unsqueeze(0)
-            if use_cuda:
-                inp = inp.to('cuda')
-            start_time=time.time()
-            ploc, plabel,_ = model(inp)
-            time.time()-start_time
-            print('Mode inference time: ', time.time()-start_time)
-            try:
-                result = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)[0]
-            except:
-                #raise
-                print("No object detected in idx: {}".format(idx))
-                continue
-            print('Decoding time: ', time.time()-start_time)
-            loc, label, prob = [r.cpu().numpy() for r in result]
-            
-            for loc_, label_, prob_ in zip(loc, label, prob):
-                ret.append([image_id, loc_[0]*wtot, \
-                                      loc_[1]*htot,
-                                      (loc_[2] - loc_[0])*wtot,
-                                      (loc_[3] - loc_[1])*htot,
-                                      prob_,
-                                      inv_map[label_]])
-    print("")
+                        for loc_, label_, prob_ in zip(loc, label, prob):
+                            ret.append([image_id, loc_[0]*wtot, \
+                                                  loc_[1]*htot,
+                                                  (loc_[2] - loc_[0])*wtot,
+                                                  (loc_[3] - loc_[1])*htot,
+                                                  prob_,
+                                                  inv_map[label_]])
+                print("cccccccccccccccccccccccccccccccccccccc")
+                if ss == 10:
+                    conf.save(args.configure_dir)
+                    break
+
+        else:
+            conf = ipex.AmpConf(torch.int8, args.configure_dir)
+            for idx, image_id in enumerate(coco.img_keys):
+                img, (htot, wtot), _, _ = coco[idx]
+                ss += 1
+                if ss == 20:
+                    break
+
+                with torch.no_grad():
+                    with ipex.AutoMixedPrecision(conf, running_mode="inference"):
+                        print("Parsing image: {}/{}".format(idx+1, len(coco)), end="\r")
+                        #print(img.size())
+                        inp = img.unsqueeze(0)
+                        inp = inp.to(ipex.DEVICE)
+                        start_time=time.time()
+                        ploc, plabel,_ = model(inp)
+                        time.time()-start_time
+                        print('Mode inference time: ', time.time()-start_time)
+                        try:
+                            result = encoder.decode_batch(ploc.to('cpu'), plabel.to('cpu'), 0.50, 200,device=device)[0]
+                        except:
+                            #raise
+                            print("No object detected in idx: {}".format(idx))
+                            continue
+                        print('Decoding time: ', time.time()-start_time)
+                        loc, label, prob = [r.cpu().numpy() for r in result]
+
+                        for loc_, label_, prob_ in zip(loc, label, prob):
+                            ret.append([image_id, loc_[0]*wtot, \
+                                                  loc_[1]*htot,
+                                                  (loc_[2] - loc_[0])*wtot,
+                                                  (loc_[3] - loc_[1])*htot,
+                                                  prob_,
+                                                  inv_map[label_]])
+    else:
+        for idx, image_id in enumerate(coco.img_keys):
+            img, (htot, wtot), _, _ = coco[idx]
+            ss += 1
+            if ss == 20:
+                break
+            with torch.no_grad():
+                print("Parsing image: {}/{}".format(idx+1, len(coco)), end="\r")
+                #print(img.size())
+                inp = img.unsqueeze(0)
+                if use_cuda:
+                    inp = inp.to('cuda')
+                elif args.ipex:
+                    inp = inp.to(ipex.DEVICE)
+
+                start_time=time.time()
+                ploc, plabel,_ = model(inp)
+                time.time()-start_time
+                print('Mode inference time: ', time.time()-start_time)
+                try:
+                    result = encoder.decode_batch(ploc.to('cpu'), plabel.to('cpu'), 0.50, 200,device=device)[0]
+                except:
+                    #raise
+                    print("No object detected in idx: {}".format(idx))
+                    continue
+                print('Decoding time: ', time.time()-start_time)
+                loc, label, prob = [r.cpu().numpy() for r in result]
+
+                for loc_, label_, prob_ in zip(loc, label, prob):
+                    ret.append([image_id, loc_[0]*wtot, \
+                                          loc_[1]*htot,
+                                          (loc_[2] - loc_[0])*wtot,
+                                          (loc_[3] - loc_[1])*htot,
+                                          prob_,
+                                          inv_map[label_]])
+
+
     print("Predicting Ended, total time: {:.2f} s".format(time.time()-start))
     cocoDt = cocoGt.loadRes(np.array(ret))
 
@@ -106,8 +207,13 @@ def eval_ssd_r34_mlperf_coco(args):
     from coco import COCO
     # Check that GPUs are actually available
     use_cuda = not args.no_cuda and torch.cuda.is_available()
+
     dboxes = dboxes_R34_coco(args.image_size,args.strides)
+
+
     encoder = Encoder(dboxes)
+
+
     val_trans = SSDTransformer(dboxes, (args.image_size[0], args.image_size[1]), val=True)
 
     val_annotate = os.path.join(args.data, "annotations/instances_val2017.json")
@@ -123,13 +229,15 @@ def eval_ssd_r34_mlperf_coco(args):
     od = torch.load(args.checkpoint, map_location=lambda storage, loc: storage)
     ssd_r34.load_state_dict(od["model"])
 
-    if use_cuda:
-        ssd_r34.cuda(args.device)
     loss_func = Loss(dboxes)
     if use_cuda:
+        ssd_r34.cuda(args.device)
         loss_func.cuda(args.device)
-
-    coco_eval(ssd_r34, val_coco, cocoGt, encoder, inv_map, args.threshold,args.device,use_cuda)
+    elif args.ipex:
+         ssd_r34 = ssd_r34.to(ipex.DEVICE)
+    if args.jit:
+        ssd_r34 = torch.jit.script(ssd_r34)
+    coco_eval(ssd_r34, val_coco, cocoGt, encoder, inv_map, args)
 
 def main():
     args = parse_args()
@@ -143,7 +251,8 @@ def main():
         np.random.seed(seed=args.seed)
     if not args.no_cuda:
         torch.cuda.set_device(args.device)
-    torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.benchmark = True
+    print("kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk")
     eval_ssd_r34_mlperf_coco(args)
 
 if __name__ == "__main__":

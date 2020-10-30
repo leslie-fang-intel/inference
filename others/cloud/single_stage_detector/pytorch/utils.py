@@ -22,7 +22,7 @@ def calc_iou_tensor(box1, box2):
     """ Calculation of IoU based on two boxes tensor,
         Reference to https://github.com/kuangliu/pytorch-ssd
         input:
-            box1 (N, 4) 
+            box1 (N, 4)
             box2 (M, 4)
         output:
             IoU (N, M)
@@ -59,12 +59,12 @@ class Encoder(object):
     """
         Inspired by https://github.com/kuangliu/pytorch-ssd
         Transform between (bboxes, lables) <-> SSD output
-        
-        dboxes: default boxes in size 8732 x 4, 
+
+        dboxes: default boxes in size 8732 x 4,
             encoder: input ltrb format, output xywh format
-            decoder: input xywh format, output ltrb format 
-        
-        encode: 
+            decoder: input xywh format, output ltrb format
+
+        encode:
             input  : bboxes_in (Tensor nboxes x 4), labels_in (Tensor nboxes)
             output : bboxes_out (Tensor 8732 x 4), labels_out (Tensor 8732)
             criteria : IoU threshold of bboexes
@@ -83,7 +83,7 @@ class Encoder(object):
         #print("# Bounding boxes: {}".format(self.nboxes))
         self.scale_xy = dboxes.scale_xy
         self.scale_wh = dboxes.scale_wh
-    
+
     def encode(self, bboxes_in, labels_in, criteria = 0.5):
 
         ious = calc_iou_tensor(bboxes_in, self.dboxes)
@@ -125,7 +125,7 @@ class Encoder(object):
         else:
             self.dboxes = self.dboxes.cuda(device)
             self.dboxes_xywh = self.dboxes_xywh.cuda(device)
-            
+
         bboxes_in = bboxes_in.permute(0, 2, 1)
         scores_in = scores_in.permute(0, 2, 1)
         #print(bboxes_in.device, scores_in.device, self.dboxes_xywh.device)
@@ -136,7 +136,7 @@ class Encoder(object):
         bboxes_in[:, :, :2] = bboxes_in[:, :, :2]*self.dboxes_xywh[:, :, 2:] + self.dboxes_xywh[:, :, :2]
         bboxes_in[:, :, 2:] = bboxes_in[:, :, 2:].exp()*self.dboxes_xywh[:, :, 2:]
 
-        # Transform format to ltrb 
+        # Transform format to ltrb
         l, t, r, b = bboxes_in[:, :, 0] - 0.5*bboxes_in[:, :, 2],\
                      bboxes_in[:, :, 1] - 0.5*bboxes_in[:, :, 3],\
                      bboxes_in[:, :, 0] + 0.5*bboxes_in[:, :, 2],\
@@ -148,7 +148,7 @@ class Encoder(object):
         bboxes_in[:, :, 3] = b
 
         return bboxes_in, F.softmax(scores_in, dim=-1)
-   
+
     def decode_batch(self, bboxes_in, scores_in,  criteria = 0.45, max_output=200,device=0):
         bboxes, probs = self.scale_back_batch(bboxes_in, scores_in,device)
         output = []
@@ -162,8 +162,8 @@ class Encoder(object):
     # perform non-maximum suppression
     def decode_single(self, bboxes_in, scores_in, criteria, max_output, max_num=200):
         # Reference to https://github.com/amdegroot/ssd.pytorch
-       
-        bboxes_out = []        
+
+        bboxes_out = []
         scores_out = []
         labels_out = []
 
@@ -172,7 +172,7 @@ class Encoder(object):
             # print(score[score>0.90])
             if i == 0: continue
             # print(i)
-            
+
             score = score.squeeze(1)
             mask = score > 0.05
 
@@ -185,13 +185,13 @@ class Encoder(object):
             score_idx_sorted = score_idx_sorted[-max_num:]
             candidates = []
             #maxdata, maxloc = scores_in.sort()
-        
+
             while score_idx_sorted.numel() > 0:
                 idx = score_idx_sorted[-1].item()
                 bboxes_sorted = bboxes[score_idx_sorted, :]
                 bboxes_idx = bboxes[idx, :].unsqueeze(dim=0)
                 iou_sorted = calc_iou_tensor(bboxes_sorted, bboxes_idx).squeeze()
-                # we only need iou < criteria 
+                # we only need iou < criteria
                 score_idx_sorted = score_idx_sorted[iou_sorted < criteria]
                 candidates.append(idx)
 
@@ -218,7 +218,7 @@ class DefaultBoxes(object):
 
         self.scale_xy_ = scale_xy
         self.scale_wh_ = scale_wh
-        
+
         # According to https://github.com/weiliu89/caffe
         # Calculation method slightly different from paper
         self.steps_w = [st[0] for st in steps]
@@ -243,7 +243,7 @@ class DefaultBoxes(object):
             for w, h in all_sizes:
                 for i, j in itertools.product(range(sfeat_w), range(sfeat_h)):
                     cx, cy = (j+0.5)/fkh[idx], (i+0.5)/fkw[idx]
-                    self.default_boxes.append((cx, cy, w, h)) 
+                    self.default_boxes.append((cx, cy, w, h))
         self.dboxes = torch.tensor(self.default_boxes)
         self.dboxes.clamp_(min=0, max=1)
         # For IoU calculation
@@ -252,12 +252,12 @@ class DefaultBoxes(object):
         self.dboxes_ltrb[:, 1] = self.dboxes[:, 1] - 0.5*self.dboxes[:, 3]
         self.dboxes_ltrb[:, 2] = self.dboxes[:, 0] + 0.5*self.dboxes[:, 2]
         self.dboxes_ltrb[:, 3] = self.dboxes[:, 1] + 0.5*self.dboxes[:, 3]
-    
+
     @property
     def scale_xy(self):
         return self.scale_xy_
-    
-    @property    
+
+    @property
     def scale_wh(self):
         return self.scale_wh_
 
@@ -276,7 +276,7 @@ class SSDCropping(object):
         Reference to https://github.com/chauhan-utk/ssd.DomainAdaptation
     """
     def __init__(self):
-        
+
         self.sample_options = (
             # Do nothing
             None,
@@ -291,27 +291,27 @@ class SSDCropping(object):
         )
 
     def __call__(self, img, img_size, bboxes, labels):
-       
+
         # Ensure always return cropped image
         while True:
             mode = random.choice(self.sample_options)
-            
+
             if mode is None:
                 return img, img_size, bboxes, labels
 
             htot, wtot = img_size
-           
+
             min_iou, max_iou = mode
             min_iou = float("-inf") if min_iou is None else min_iou
             max_iou = float("+inf") if max_iou is None else max_iou
-            
+
             # Implementation uses 1 iteration to find a possible candidate, this
             # was shown to produce the same mAP as using more iterations.
             for _ in range(1):
                 # suze of each sampled path in [0.1, 1] 0.3*0.3 approx. 0.1
                 w = random.uniform(0.3 , 1.0)
                 h = random.uniform(0.3 , 1.0)
-                
+
                 if w/h < 0.5 or w/h > 2:
                     continue
 
@@ -323,7 +323,7 @@ class SSDCropping(object):
                 bottom = top + h
 
                 ious = calc_iou_tensor(bboxes, torch.tensor([[left, top, right, bottom]]))
-               
+
                 # tailor all the bboxes and return
                 if not ((ious > min_iou) & (ious < max_iou)).all():
                     continue
@@ -331,13 +331,13 @@ class SSDCropping(object):
                 # discard any bboxes whose center not in the cropped image
                 xc = 0.5*(bboxes[:, 0] + bboxes[:, 2])
                 yc = 0.5*(bboxes[:, 1] + bboxes[:, 3])
-                
+
                 masks = (xc > left) & (xc < right) & (yc > top) & (yc < bottom)
-                
+
                 # if no such boxes, continue searching again
                 if not masks.any():
                     continue
-                
+
                 bboxes[bboxes[:, 0] < left, 0] = left
                 bboxes[bboxes[:, 1] < top, 1] = top
                 bboxes[bboxes[:, 2] > right, 2] = right
@@ -364,7 +364,7 @@ class SSDCropping(object):
                 htot = bottom_idx - top_idx
                 wtot = right_idx - left_idx
                 return img, (htot, wtot), bboxes, labels
- 
+
 class ToTensor(object):
     def __init__(self):
         pass
@@ -392,18 +392,18 @@ class LightingNoice(object):
         # Transform from HWC to CHW
         img = img.permute(2, 0 ,1)
         return img
-        alpha0 = random.gauss(sigma=0.1, mu=0) 
-        alpha1 = random.gauss(sigma=0.1, mu=0) 
+        alpha0 = random.gauss(sigma=0.1, mu=0)
+        alpha1 = random.gauss(sigma=0.1, mu=0)
         alpha2 = random.gauss(sigma=0.1, mu=0)
-       
+
         channels = alpha0*self.eigval[0]*self.eigvec[0, :] + \
                    alpha1*self.eigval[1]*self.eigvec[1, :] + \
                    alpha2*self.eigval[2]*self.eigvec[2, :]
         channels = channels.view(3, 1, 1)
         img += channels
-        
+
         return img
-        
+
 class RandomHorizontalFlip(object):
     def __init__(self, p=0.5):
         self.p = p
@@ -425,7 +425,7 @@ class SSDTransformer(object):
     """
     def __init__(self, dboxes, size = (300, 300), val=False):
 
-        # define vgg16 mean 
+        # define vgg16 mean
         self.size = size
         self.val = val
 
@@ -437,12 +437,12 @@ class SSDTransformer(object):
             transforms.Resize(self.size),
             #transforms.Resize((300, 300)),
             #transforms.RandomHorizontalFlip(),
-            transforms.ColorJitter(brightness=0.125, contrast=0.5, 
+            transforms.ColorJitter(brightness=0.125, contrast=0.5,
                 saturation=0.5, hue=0.05
             ),
             transforms.ToTensor()
             #LightingNoice(),
-        ]) 
+        ])
         self.hflip = RandomHorizontalFlip()
 
         # All Pytorch Tensor will be normalized
@@ -457,7 +457,7 @@ class SSDTransformer(object):
             transforms.ToTensor(),
             #ToTensor(),
             self.normalize,])
-    
+
     @property
     def dboxes(self):
         return self.dboxes_
@@ -470,7 +470,7 @@ class SSDTransformer(object):
             bbox_out[:bbox.size(0), :] = bbox
             label_out[:label.size(0)] = label
             return self.trans_val(img), img_size, bbox_out, label_out
-   
+
         #print("before", img.size, bbox)
         img, img_size, bbox, label = self.crop(img, img_size, bbox, label)
         #print("after", img.size, bbox)
@@ -539,7 +539,7 @@ class COCODetection(data.Dataset):
         return len(self.label_info)
 
     @staticmethod
-    def load(pklfile):  
+    def load(pklfile):
         #print("Loading from {}".format(pklfile))
         with bz2.open(pklfile, "rb") as fin:
             ret = pickle.load(fin)
@@ -550,7 +550,7 @@ class COCODetection(data.Dataset):
         with bz2.open(pklfile, "wb") as fout:
             pickle.dump(self, fout)
 
-    
+
     def __len__(self):
         return len(self.images)
 
@@ -572,7 +572,7 @@ class COCODetection(data.Dataset):
             #l, t, r, b = xc - 0.5*w, yc - 0.5*h, xc + 0.5*w, yc + 0.5*h
             bbox_size = (l/wtot, t/htot, r/wtot, b/htot)
             bbox_sizes.append(bbox_size)
-            bbox_labels.append(bbox_label) 
+            bbox_labels.append(bbox_label)
         bbox_sizes = torch.tensor(bbox_sizes)
         bbox_labels =  torch.tensor(bbox_labels)
 
@@ -583,7 +583,7 @@ class COCODetection(data.Dataset):
         else:
             pass
 
-        return img, (htot, wtot), bbox_sizes, bbox_labels    
+        return img, img_id, (htot, wtot), bbox_sizes, bbox_labels
 
 # Implement a datareader for VOC dataset
 class VOCDetection(data.Dataset):
@@ -600,7 +600,7 @@ class VOCDetection(data.Dataset):
         self.transform = transform
         self.difficult = difficult
         self.file_filter = file_filter
-        
+
         # Read file filter to filter out files
         with open(file_filter, "r") as fin:
             self.filter = fin.read().strip().split("\n")
@@ -619,9 +619,9 @@ class VOCDetection(data.Dataset):
         self.label_map[0] = "background"
         self.label_num += 1
         #print("Finished Reading")
-    
+
     def _parse_xml(self, xml_file):
-        #print(xml_file) 
+        #print(xml_file)
         root = ElementTree.ElementTree(file=xml_file)
         img_name = root.find("filename").text
         # Get basename
@@ -629,7 +629,7 @@ class VOCDetection(data.Dataset):
         if base_name not in self.filter:
             return []
 
-        img_size = ( 
+        img_size = (
             int(root.find("size").find("height").text) ,
             int(root.find("size").find("width").text)  ,
             int(root.find("size").find("depth").text)  , )
@@ -657,7 +657,7 @@ class VOCDetection(data.Dataset):
         return (img_name, img_size, tmp_data)
 
     def __getitem__(self, idx):
-       
+
         image_info = self.images[idx]
         #print(self.images)
         #print(image_info)
@@ -667,14 +667,14 @@ class VOCDetection(data.Dataset):
 
         # Assert the record in xml and image matches
         # assert img.size == image_info[1], "Image Size Does Not Match!"
-       
-        htot, wtot, _ = image_info[1] 
+
+        htot, wtot, _ = image_info[1]
 
         bbox_sizes = []
         bbox_labels = []
 
         for (xmin, ymin, xmax, ymax), bbox_label in image_info[2]:
-            #cx, cy, w, h = (xmin + xmax)/2, (ymin + ymax)/2, xmax - xmin, ymax - ymin 
+            #cx, cy, w, h = (xmin + xmax)/2, (ymin + ymax)/2, xmax - xmin, ymax - ymin
             #bbox_size = (cx, cy, w, h)
             #print(cx, cy, w, h)
             #bbox_size = (cx/wtot, cy/htot, w/wtot, h/htot)
@@ -688,8 +688,8 @@ class VOCDetection(data.Dataset):
         bbox_labels =  torch.tensor(bbox_labels)
         #bbox_size = (xmin, ymin, xmax, ymax)
         #bbox_label = bbox_info[3]
-        
-        # Perform image transformation 
+
+        # Perform image transformation
         if self.transform != None:
             img, (htot, wtot), bbox_sizes, bbox_labels = \
                 self.transform(img, (htot, wtot), bbox_sizes, bbox_labels)
@@ -714,7 +714,7 @@ def draw_patches(img, bboxes, labels, order="xywh", label_map={}):
     # img = img.numpy()
     img = np.array(img)
     labels = np.array(labels)
-    bboxes = bboxes.numpy() 
+    bboxes = bboxes.numpy()
 
     if label_map:
         labels = [label_map.get(l) for l in labels]
@@ -737,10 +737,10 @@ def draw_patches(img, bboxes, labels, order="xywh", label_map={}):
     ax = plt.gca()
     for (cx, cy, w, h), label in zip(bboxes, labels):
         if label == "background": continue
-        ax.add_patch(patches.Rectangle((cx-0.5*w, cy-0.5*h), 
+        ax.add_patch(patches.Rectangle((cx-0.5*w, cy-0.5*h),
                                         w, h, fill=False, color="r"))
         bbox_props = dict(boxstyle="round", fc="y", ec="0.5", alpha=0.3)
-        ax.text(cx-0.5*w, cy-0.5*h, label, ha="center", va="center", size=15, bbox=bbox_props) 
+        ax.text(cx-0.5*w, cy-0.5*h, label, ha="center", va="center", size=15, bbox=bbox_props)
     plt.show()
 
 

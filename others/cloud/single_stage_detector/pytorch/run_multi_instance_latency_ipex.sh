@@ -3,14 +3,21 @@
 ###############################################################################
 ### How to run?
 ### 1) int8 inference
-###    bash run_multi_instance_latency_ipex.sh dnnl int8 jit ssd_resnet34.json
+###    bash run_multi_instance_latency_ipex.sh int8 jit ssd_resnet34.json
 ### 2) fp32 infenence
-###    bash run_multi_instance_latency_ipex.sh dnnl fp32 jit
+###    bash run_multi_instance_latency_ipex.sh fp32 jit
 ###
 ###############################################################################
 
 export DNNL_PRIMITIVE_CACHE_CAPACITY=1024
 export USE_IPEX=1
+
+if [ "x$DATA_DIR" == "x"  ]; then
+    echo "DATA_DIR not set" && exit 1
+fi
+if [ "x$MODEL_DIR" == "x"  ]; then
+    echo "MODEL_DIR not set" && exit 1
+fi
 
 CONFIG_FILE=""
 ARGS=""
@@ -58,8 +65,9 @@ for i in $(seq 1 $LAST_INSTANCE); do
     LOG_i=inference_cpu_bs${BATCH_SIZE}_ins${i}.txt
 
     echo "### running on instance $i, numa node $numa_node_i, core list {$start_core_i, $end_core_i}..."
-    numactl --physcpubind=$start_core_i-$end_core_i --membind=$numa_node_i python -u infer.py -e -a $ARGS \
-        --dummy -j 0 -b $BATCH_SIZE $CONFIG_FILE 2>&1 | tee $LOG_i &
+    numactl --physcpubind=$start_core_i-$end_core_i --membind=$numa_node_i python -u infer.py $ARGS \
+        --data $DATA_DIR --device 0 --checkpoint $MODEL_DIR -w 10 -j 0 --ipex --no-cuda --iteration 100 \
+        -b $BATCH_SIZE $CONFIG_FILE 2>&1 | tee $LOG_i &
 done
 
 numa_node_0=0
@@ -68,8 +76,9 @@ end_core_0=`expr $CORES_PER_INSTANCE - 1`
 LOG_0=inference_cpu_bs${BATCH_SIZE}_ins0.txt
 
 echo "### running on instance 0, numa node $numa_node_0, core list {$start_core_0, $end_core_0}...\n\n"
-numactl --physcpubind=$start_core_0-$end_core_0 --membind=$numa_node_0 python -u infer.py -e -a $ARGS \
-    --dummy -j 0 --ipex --no-cuda --iteration 100 -b $BATCH_SIZE $CONFIG_FILE 2>&1 | tee $LOG_0
+numactl --physcpubind=$start_core_0-$end_core_0 --membind=$numa_node_0 python -u infer.py $ARGS \
+    --data $DATA_DIR --device 0 --checkpoint $MODEL_DIR -w 10 -j 0 --ipex --no-cuda --iteration 100 \
+    -b $BATCH_SIZE $CONFIG_FILE 2>&1 | tee $LOG_0
 
 sleep 10
 echo -e "\n\n Sum sentences/s together:"

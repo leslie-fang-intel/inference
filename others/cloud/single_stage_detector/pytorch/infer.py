@@ -54,7 +54,7 @@ def parse_args():
                         help='path to int8 configures, default file name is configure.json')
     parser.add_argument("--dummy", action='store_true',
                         help="using  dummu data to test the performance of inference")
-    parser.add_argument('-w', '--warmup-iterations', default=10, type=int, metavar='N',
+    parser.add_argument('-w', '--warmup-iterations', default=0, type=int, metavar='N',
                         help='number of warmup iterations to run')
     return parser.parse_args()
 
@@ -138,7 +138,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
             conf = ipex.AmpConf(torch.int8)
             for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
                 with torch.no_grad():
-                    with ipex.AutoMixedPrecision(conf, running_mode="calibration"):
+                    with ipex.AutoMixPrecision(conf, running_mode="calibration"):
                         inp = img.to(ipex.DEVICE)
                         start_time = time.time()
                         ploc, plabel,_ = model(inp)
@@ -177,7 +177,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                 img = torch.randn(args.batch_size, 3, 1200, 1200).to(ipex.DEVICE)
                 for nbatch in range(args.iteration):
                     with torch.no_grad():
-                        with ipex.AutoMixedPrecision(conf, running_mode="inference"):
+                        with ipex.AutoMixPrecision(conf, running_mode="inference"):
                             if nbatch >= args.warmup_iterations:
                                 start_time=time.time()
                             ploc, plabel,_ = model(img)
@@ -189,18 +189,21 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                 print('runing int8 real inputs inference path')
                 for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
                     with torch.no_grad():
-                        with ipex.AutoMixedPrecision(conf, running_mode="inference"):
+                        with ipex.AutoMixPrecision(conf, running_mode="inference"):
                             inp = img.to(ipex.DEVICE)
-                            start_time=time.time()
+                            if nbatch >= args.warmup_iterations:
+                                start_time=time.time()
                             ploc, plabel,_ = model(inp)
-                            inference_time.update(time.time() - start_time)
-                            end_time = time.time()
+                            if nbatch >= args.warmup_iterations:
+                                inference_time.update(time.time() - start_time)
+                                end_time = time.time()
                             try:
                                 results = encoder.decode_batch(ploc.to('cpu'), plabel.to('cpu'), 0.50, 200,device=device)
                             except:
                                 print("No object detected in idx: {}".format(idx))
                                 continue
-                            decoding_time.update(time.time() - end_time)
+                            if nbatch >= args.warmup_iterations:
+                                decoding_time.update(time.time() - end_time)
                             (htot, wtot) = [d.cpu().numpy() for d in img_size]
                             img_id = img_id.cpu().numpy()
                             # Iterate over batch elements
@@ -245,16 +248,19 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                     elif args.ipex:
                         img = img.to(ipex.DEVICE)
 
-                    start_time=time.time()
+                    if nbatch >= args.warmup_iterations:
+                        start_time=time.time()
                     ploc, plabel,_ = model(img)
-                    inference_time.update(time.time() - start_time)
-                    end_time = time.time()
+                    if nbatch >= args.warmup_iterations:
+                        inference_time.update(time.time() - start_time)
+                        end_time = time.time()
                     try:
                         results = encoder.decode_batch(ploc.to('cpu'), plabel.to('cpu'), 0.50, 200,device=device)
                     except:
                         print("No object detected in idx: {}".format(idx))
                         continue
-                    decoding_time.update(time.time() - end_time)
+                    if nbatch >= args.warmup_iterations:
+                        decoding_time.update(time.time() - end_time)
                     (htot, wtot) = [d.cpu().numpy() for d in img_size]
                     img_id = img_id.cpu().numpy()
                     # Iterate over batch elements

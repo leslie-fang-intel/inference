@@ -12,6 +12,13 @@
 export DNNL_PRIMITIVE_CACHE_CAPACITY=1024
 export USE_IPEX=1
 
+if [ "x$DATA_DIR" == "x"  ]; then
+    echo "DATA_DIR not set" && exit 1
+fi
+if [ "x$MODEL_DIR" == "x"  ]; then
+    echo "MODEL_DIR not set" && exit 1
+fi
+
 CONFIG_FILE=""
 ARGS=""
 
@@ -39,7 +46,7 @@ CORES_PER_INSTANCE=$CORES
 
 KMP_SETTING="KMP_AFFINITY=granularity=fine,compact,1,0"
 
-BATCH_SIZE=128
+BATCH_SIZE=32
 
 export OMP_NUM_THREADS=$CORES_PER_INSTANCE
 export $KMP_SETTING
@@ -58,8 +65,9 @@ for i in $(seq 1 $LAST_INSTANCE); do
     LOG_i=inference_cpu_bs${BATCH_SIZE}_ins${i}.txt
 
     echo "### running on instance $i, numa node $numa_node_i, core list {$start_core_i, $end_core_i}..."
-    numactl --physcpubind=$start_core_i-$end_core_i --membind=$numa_node_i python -u infer.py  $ARGS \
-        --dummy -j 0 --ipex --no-cuda --iteration 100 -b $BATCH_SIZE $CONFIG_FILE 2>&1 | tee $LOG_i &
+    numactl --physcpubind=$start_core_i-$end_core_i --membind=$numa_node_i python -u infer.py $ARGS \
+        --data $DATA_DIR --device 0 --checkpoint $MODEL_DIR -w 10 -j 0 --ipex --no-cuda --iteration 100 \
+        -b $BATCH_SIZE $CONFIG_FILE 2>&1 | tee $LOG_i &
 done
 
 numa_node_0=0
@@ -69,7 +77,8 @@ LOG_0=inference_cpu_bs${BATCH_SIZE}_ins0.txt
 
 echo "### running on instance 0, numa node $numa_node_0, core list {$start_core_0, $end_core_0}...\n\n"
 numactl --physcpubind=$start_core_0-$end_core_0 --membind=$numa_node_0 python -u infer.py $ARGS \
-    --dummy -j 0 --ipex --no-cuda --iteration 100 -b $BATCH_SIZE $CONFIG_FILE 2>&1 | tee $LOG_0
+    --data $DATA_DIR --device 0 --checkpoint $MODEL_DIR -w 10 -j 0 --ipex --no-cuda --iteration 100 \
+    -b $BATCH_SIZE $CONFIG_FILE 2>&1 | tee $LOG_0
 
 sleep 10
 echo -e "\n\n Sum sentences/s together:"

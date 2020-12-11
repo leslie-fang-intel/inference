@@ -198,7 +198,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                 inference_time.update(time.time() - start_time)
                                 end_time = time.time()
                             try:
-                                results = encoder.decode_batch(ploc.to('cpu'), plabel.to('cpu'), 0.50, 200,device=device)
+                                results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
                             except:
                                 print("No object detected in idx: {}".format(idx))
                                 continue
@@ -255,7 +255,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                         inference_time.update(time.time() - start_time)
                         end_time = time.time()
                     try:
-                        results = encoder.decode_batch(ploc.to('cpu'), plabel.to('cpu'), 0.50, 200,device=device)
+                        results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
                     except:
                         print("No object detected in idx: {}".format(idx))
                         continue

@@ -17,6 +17,9 @@ import bz2
 import pickle
 from math import sqrt, ceil
 
+if os.environ.get('USE_IPEX') == "1":
+    import intel_pytorch_extension as ipex
+
 from intel_pytorch_extension import batch_score_nms
 
 # This function is from https://github.com/kuangliu/pytorch-ssd.
@@ -124,9 +127,9 @@ class Encoder(object):
         if bboxes_in.device == torch.device("cpu"):
             self.dboxes = self.dboxes.cpu()
             self.dboxes_xywh = self.dboxes_xywh.cpu()
-        elif bboxes_in.device == torch.device("dpcpp"):
-            self.dboxes = self.dboxes.to("dpcpp")
-            self.dboxes_xywh = self.dboxes_xywh.to("dpcpp")
+        elif bboxes_in.device == torch.device(ipex.DEVICE):
+            self.dboxes = self.dboxes.to(ipex.DEVICE)
+            self.dboxes_xywh = self.dboxes_xywh.to(ipex.DEVICE)
         else:
             self.dboxes = self.dboxes.cuda(device)
             self.dboxes_xywh = self.dboxes_xywh.cuda(device)
@@ -160,15 +163,15 @@ class Encoder(object):
         for bbox, prob in zip(bboxes.split(1, 0), probs.split(1, 0)):
             bbox = bbox.squeeze(0)
             prob = prob.squeeze(0)
-            if bbox.device == torch.device("dpcpp"):
-                output.append(self.decode_single_dpcpp(bbox, prob, criteria, max_output))
+            if bbox.device == torch.device(ipex.DEVICE):
+                output.append(self.decode_single_ipex(bbox, prob, criteria, max_output))
             else:
                 output.append(self.decode_single(bbox, prob, criteria, max_output))
             #print(output[-1])
         return output
 
-    # perform non-maximum suppression for dpcpp tensor
-    def decode_single_dpcpp(self, bboxes_in, scores_in, criteria, max_output, max_num=200):
+    # perform non-maximum suppression for IPEX tensor
+    def decode_single_ipex(self, bboxes_in, scores_in, criteria, max_output, max_num=200):
         # Reference to https://github.com/amdegroot/ssd.pytorch
 
         bboxes_out = []

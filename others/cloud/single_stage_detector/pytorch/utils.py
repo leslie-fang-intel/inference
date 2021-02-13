@@ -21,6 +21,7 @@ if os.environ.get('USE_IPEX') == "1":
     import intel_pytorch_extension as ipex
 
 from intel_pytorch_extension import batch_score_nms
+from intel_pytorch_extension import parallel_scale_back_batch
 
 # This function is from https://github.com/kuangliu/pytorch-ssd.
 def calc_iou_tensor(box1, box2):
@@ -124,6 +125,7 @@ class Encoder(object):
             Do scale and transform from xywh to ltrb
             suppose input Nx4xnum_bbox Nxlabel_numxnum_bbox
         """
+
         if bboxes_in.device == torch.device("cpu"):
             self.dboxes = self.dboxes.cpu()
             self.dboxes_xywh = self.dboxes_xywh.cpu()
@@ -133,7 +135,6 @@ class Encoder(object):
         else:
             self.dboxes = self.dboxes.cuda(device)
             self.dboxes_xywh = self.dboxes_xywh.cuda(device)
-
         bboxes_in = bboxes_in.permute(0, 2, 1)
         scores_in = scores_in.permute(0, 2, 1)
         #print(bboxes_in.device, scores_in.device, self.dboxes_xywh.device)
@@ -157,10 +158,58 @@ class Encoder(object):
 
         return bboxes_in, F.softmax(scores_in, dim=-1)
 
+    def scale_back_batch_ipex(self, bboxes_in, scores_in,device):
+        """
+            Do scale and transform from xywh to ltrb
+            suppose input Nx4xnum_bbox Nxlabel_numxnum_bbox
+
+            Leslie: Using C++ implementation in ipex instead of python
+        """
+        if bboxes_in.device == torch.device("cpu"):
+            self.dboxes = self.dboxes.cpu()
+            self.dboxes_xywh = self.dboxes_xywh.cpu()
+        elif bboxes_in.device == torch.device(ipex.DEVICE):
+            self.dboxes = self.dboxes.to(ipex.DEVICE)
+            self.dboxes_xywh = self.dboxes_xywh.to(ipex.DEVICE)
+        else:
+            self.dboxes = self.dboxes.cuda(device)
+            self.dboxes_xywh = self.dboxes_xywh.cuda(device)
+
+        bboxes_in = bboxes_in.permute(0, 2, 1)
+        scores_in = scores_in.permute(0, 2, 1)
+
+        # calculate scale
+        bboxes_in, score_in_softmax = parallel_scale_back_batch(bboxes_in, scores_in, self.dboxes_xywh, self.scale_xy, self.scale_wh)
+
+        #bboxes_in[:, :, :2] = self.scale_xy*bboxes_in[:, :, :2]
+        #bboxes_in[:, :, 2:] = self.scale_wh*bboxes_in[:, :, 2:]
+
+        #bboxes_in[:, :, :2] = bboxes_in[:, :, :2]*self.dboxes_xywh[:, :, 2:] + self.dboxes_xywh[:, :, :2]
+        #bboxes_in[:, :, 2:] = bboxes_in[:, :, 2:].exp()*self.dboxes_xywh[:, :, 2:]
+
+        # Transform format to ltrb
+        #l, t, r, b = bboxes_in[:, :, 0] - 0.5*bboxes_in[:, :, 2],\
+        #             bboxes_in[:, :, 1] - 0.5*bboxes_in[:, :, 3],\
+        #             bboxes_in[:, :, 0] + 0.5*bboxes_in[:, :, 2],\
+        #             bboxes_in[:, :, 1] + 0.5*bboxes_in[:, :, 3]
+
+        #bboxes_in[:, :, 0] = l
+        #bboxes_in[:, :, 1] = t
+        #bboxes_in[:, :, 2] = r
+        #bboxes_in[:, :, 3] = b
+
+        #score_in_softmax = F.softmax(scores_in, dim=-1)
+        #score_in_softmax = torch.nn.Softmax(dim=-1)(scores_in.to_mkldnn()).to_dense()
+
+        return bboxes_in, score_in_softmax
+
     def decode_batch(self, bboxes_in, scores_in,  criteria = 0.45, max_output=200,device=0):
-        bboxes, probs = self.scale_back_batch(bboxes_in, scores_in,device)
+        bboxes, probs = self.scale_back_batch_ipex(bboxes_in, scores_in, device) \
+                        if bboxes_in.device == torch.device(ipex.DEVICE) \
+                        else self.scale_back_batch(bboxes_in, scores_in, device)
         output = []
         for bbox, prob in zip(bboxes.split(1, 0), probs.split(1, 0)):
+            # pick out from BS one by one
             bbox = bbox.squeeze(0)
             prob = prob.squeeze(0)
             if bbox.device == torch.device(ipex.DEVICE):

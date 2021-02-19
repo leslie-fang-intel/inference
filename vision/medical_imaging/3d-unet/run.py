@@ -57,6 +57,14 @@ def get_args():
                         type=int,
                         default=16,
                         help="performance count")
+    parser.add_argument('--ipex', action='store_true', default=False,
+                        help='use intel pytorch extension')
+    parser.add_argument('--configure-dir', default='configure.json', type=str, metavar='PATH',
+                        help = 'path to int8 configures, default file name is configure.json')
+    parser.add_argument('--calibration', action='store_true', default=False,
+                        help='doing calibration step')
+    parser.add_argument('--int8', action='store_true', default=False,
+                        help='enable ipex int8 path')
     args = parser.parse_args()
     return args
 
@@ -71,11 +79,13 @@ scenario_map = {
 
 def main():
     args = get_args()
+    print(args)
 
     if args.backend == "pytorch":
         from pytorch_SUT import get_pytorch_sut
         sut = get_pytorch_sut(args.model_dir, args.preprocessed_data_dir,
-                              args.performance_count)
+                              args.performance_count, use_ipex=args.ipex,
+                              use_int8=args.int8, calibration=args.calibration, configure_dir=args.configure_dir)
     elif args.backend == "onnxruntime":
         from onnxruntime_SUT import get_onnxruntime_sut
         sut = get_onnxruntime_sut(args.model, args.preprocessed_data_dir,

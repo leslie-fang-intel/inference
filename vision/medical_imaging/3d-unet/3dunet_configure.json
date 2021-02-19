@@ -1,0 +1,515 @@
+[
+    {
+        "id": 0,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            8.271411895751953
+        ],
+        "outputs_scale": [
+            1.305309534072876
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 1,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            5.5457563400268555
+        ],
+        "outputs_scale": [
+            1.7057911157608032
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 2,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            4.847407817840576
+        ],
+        "outputs_scale": [
+            2.464937210083008
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 3,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            9.091123580932617
+        ],
+        "outputs_scale": [
+            4.3103156089782715
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 4,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            9.945784568786621
+        ],
+        "outputs_scale": [
+            5.431722640991211
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 5,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            9.184381484985352
+        ],
+        "outputs_scale": [
+            3.8695287704467773
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 6,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            13.007026672363281
+        ],
+        "outputs_scale": [
+            15.970575332641602
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 7,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            18.591901779174805
+        ],
+        "outputs_scale": [
+            24.77365493774414
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 8,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            30.65892219543457
+        ],
+        "outputs_scale": [
+            85.56729888916016
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 9,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            82.24669647216797
+        ],
+        "outputs_scale": [
+            57.588623046875
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 10,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            87.89662170410156
+        ],
+        "outputs_scale": [
+            449.2735290527344
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 11,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            357.82867431640625
+        ],
+        "outputs_scale": [
+            1919.6588134765625
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 12,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            87.89662170410156
+        ],
+        "outputs_scale": [
+            129.67579650878906
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 13,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            132.31300354003906
+        ],
+        "outputs_scale": [
+            132.7986297607422
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 14,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            95.88600158691406
+        ],
+        "outputs_scale": [
+            169.3238525390625
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 15,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            30.65892219543457
+        ],
+        "outputs_scale": [
+            24.718631744384766
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 16,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            26.69940185546875
+        ],
+        "outputs_scale": [
+            20.126174926757812
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 17,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            10.129959106445312
+        ],
+        "outputs_scale": [
+            4.333187580108643
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 18,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            13.007026672363281
+        ],
+        "outputs_scale": [
+            10.03543472290039
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 19,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            27.36441993713379
+        ],
+        "outputs_scale": [
+            10.441451072692871
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 20,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            6.214942932128906
+        ],
+        "outputs_scale": [
+            2.9511537551879883
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 21,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            9.945784568786621
+        ],
+        "outputs_scale": [
+            5.688991546630859
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 22,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            16.758604049682617
+        ],
+        "outputs_scale": [
+            4.993846416473389
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 23,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            3.5197741985321045
+        ],
+        "outputs_scale": [
+            2.9945449829101562
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 24,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            4.847407817840576
+        ],
+        "outputs_scale": [
+            4.414778709411621
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 25,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            16.134124755859375
+        ],
+        "outputs_scale": [
+            9.31181812286377
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    },
+    {
+        "id": 26,
+        "name": "Convolution",
+        "algorithm": "min_max",
+        "weight_granularity": "per_channel",
+        "inputs_scale": [
+            3.0228090286254883
+        ],
+        "outputs_scale": [
+            3.022226572036743
+        ],
+        "inputs_uint8_used": [
+            false
+        ],
+        "outputs_uint8_used": [
+            false
+        ],
+        "quantized": true
+    }
+]

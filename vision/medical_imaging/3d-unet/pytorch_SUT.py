@@ -31,7 +31,8 @@ sys.path.insert(0, os.path.join(os.getcwd(), "nnUnet"))
 from nnunet.training.model_restore import load_model_and_checkpoint_files
 
 class _3DUNET_PyTorch_SUT():
-    def __init__(self, model_dir, preprocessed_data_dir, performance_count, folds, checkpoint_name):
+    def __init__(self, model_dir, preprocessed_data_dir, performance_count, folds, checkpoint_name, use_ipex,
+                     use_int8, calibration, configure_dir):
 
         print("Loading PyTorch model...")
         model_path = os.path.join(model_dir, "plans.pkl")
@@ -45,6 +46,11 @@ class _3DUNET_PyTorch_SUT():
         print("Finished constructing SUT.")
         self.qsl = get_brats_QSL(preprocessed_data_dir, performance_count)
 
+        self.use_ipex = use_ipex
+        self.use_int8 = use_int8
+        self.calibration = calibration
+        self.configure_dir = configure_dir
+
     def issue_queries(self, query_samples):
         with torch.no_grad():
             #print(self.trainer.network)
@@ -54,14 +60,22 @@ class _3DUNET_PyTorch_SUT():
             #print(mkldnn_model)
             import intel_pytorch_extension as ipex
 
-            conf = ipex.AmpConf(torch.bfloat16)
-            automix = True
-            mkldnn = True
+            conf = None
+            if self.use_ipex:
+                if self.use_int8 and self.calibration:
+                    # INT8 calibration
+                    conf = ipex.AmpConf(torch.int8)
+                elif self.use_int8:
+                    # INT8 inference
+                    conf = ipex.AmpConf(torch.int8, self.configure_dir)
+                else:
+                    # BF16 inference
+                    conf = ipex.AmpConf(torch.bfloat16)
 
             model = self.trainer.network
-            if automix:
+            if self.use_ipex:
                 model = model.to(device = ipex.DEVICE)
-            elif mkldnn:
+            else:
                 from torch.utils import mkldnn as mkldnn_utils
                 model = mkldnn_utils.to_mkldnn(model)
 
@@ -72,7 +86,18 @@ class _3DUNET_PyTorch_SUT():
                 image = torch.from_numpy(data[np.newaxis,...]).float().to(self.device)
 
                 start_time = time.time()
-                if automix:
+                if self.use_ipex and self.use_int8 and self.calibration:
+                    # INT8 calibration
+                    image = image.to(device = ipex.DEVICE)
+                    with ipex.AutoMixPrecision(conf, running_mode="calibration"):
+                        output = model(image)
+                elif self.use_ipex and self.use_int8:
+                    # INT8 inference
+                    image = image.to(device = ipex.DEVICE)
+                    with ipex.AutoMixPrecision(conf, running_mode="inference"):
+                        output = model(image)
+                elif self.use_ipex:
+                    # BF16 inference
                     image = image.to(device = ipex.DEVICE)
                     with ipex.AutoMixPrecision(conf, running_mode="inference"):
                         output = model(image)
@@ -81,6 +106,8 @@ class _3DUNET_PyTorch_SUT():
                 end_time = time.time()
 
                 print("Running time for one sample is: {}".format(end_time-start_time))
+
+                #print(output[0].cpu().numpy())
 
                 output = output[0].cpu().numpy().astype(np.float16)
 
@@ -93,6 +120,8 @@ class _3DUNET_PyTorch_SUT():
                 bi = response_array.buffer_info()
                 response = lg.QuerySampleResponse(query_samples[i].id, bi[0], bi[1])
                 lg.QuerySamplesComplete([response])
+            if self.use_ipex and self.use_int8 and self.calibration:
+                conf.save(self.configure_dir)
 
     def flush_queries(self):
         pass
@@ -100,5 +129,7 @@ class _3DUNET_PyTorch_SUT():
     def process_latencies(self, latencies_ns):
         pass
 
-def get_pytorch_sut(model_dir, preprocessed_data_dir, performance_count, folds=1, checkpoint_name="model_final_checkpoint"):
-    return _3DUNET_PyTorch_SUT(model_dir, preprocessed_data_dir, performance_count, folds, checkpoint_name)
+def get_pytorch_sut(model_dir, preprocessed_data_dir, performance_count, folds=1, checkpoint_name="model_final_checkpoint", use_ipex=False,
+                           use_int8=False, calibration=False, configure_dir="configure.json"):
+    return _3DUNET_PyTorch_SUT(model_dir, preprocessed_data_dir, performance_count, folds, checkpoint_name, use_ipex,
+                               use_int8, calibration, configure_dir)

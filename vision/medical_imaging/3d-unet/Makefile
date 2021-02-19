@@ -94,9 +94,9 @@ init_submodule:
 download_model:
 	@echo "Download models..."
 	@$(MAKE) -f $(MAKEFILE_NAME) download_pytorch_model
-	@$(MAKE) -f $(MAKEFILE_NAME) download_onnx_model
-	@$(MAKE) -f $(MAKEFILE_NAME) download_tf_model
-	@$(MAKE) -f $(MAKEFILE_NAME) download_openvino_model
+	#@$(MAKE) -f $(MAKEFILE_NAME) download_onnx_model
+	#@$(MAKE) -f $(MAKEFILE_NAME) download_tf_model
+	#@$(MAKE) -f $(MAKEFILE_NAME) download_openvino_model
 
 .PHONY: download_pytorch_model
 download_pytorch_model: create_directories

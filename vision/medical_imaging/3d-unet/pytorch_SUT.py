@@ -25,6 +25,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from brats_QSL import get_brats_QSL
+import time
 
 sys.path.insert(0, os.path.join(os.getcwd(), "nnUnet"))
 from nnunet.training.model_restore import load_model_and_checkpoint_files
@@ -46,13 +47,42 @@ class _3DUNET_PyTorch_SUT():
 
     def issue_queries(self, query_samples):
         with torch.no_grad():
+            #print(self.trainer.network)
+            #print("-----------------------------------------print mkldnn model-----------------------------")
+            #from torch.utils import mkldnn as mkldnn_utils
+            #mkldnn_model = mkldnn_utils.to_mkldnn(self.trainer.network)
+            #print(mkldnn_model)
+            import intel_pytorch_extension as ipex
+
+            conf = ipex.AmpConf(torch.bfloat16)
+            automix = True
+            mkldnn = True
+
+            model = self.trainer.network
+            if automix:
+                model = model.to(device = ipex.DEVICE)
+            elif mkldnn:
+                from torch.utils import mkldnn as mkldnn_utils
+                model = mkldnn_utils.to_mkldnn(model)
+
             for i in range(len(query_samples)):
                 data = self.qsl.get_features(query_samples[i].index)
 
                 print("Processing sample id {:d} with shape = {:}".format(query_samples[i].index, data.shape))
-
                 image = torch.from_numpy(data[np.newaxis,...]).float().to(self.device)
-                output = self.trainer.network(image)[0].cpu().numpy().astype(np.float16)
+
+                start_time = time.time()
+                if automix:
+                    image = image.to(device = ipex.DEVICE)
+                    with ipex.AutoMixPrecision(conf, running_mode="inference"):
+                        output = model(image)
+                else:
+                    output = model(image)
+                end_time = time.time()
+
+                print("Running time for one sample is: {}".format(end_time-start_time))
+
+                output = output[0].cpu().numpy().astype(np.float16)
 
                 transpose_forward = self.trainer.plans.get("transpose_forward")
                 transpose_backward = self.trainer.plans.get("transpose_backward")

@@ -65,6 +65,14 @@ def get_args():
                         help='doing calibration step')
     parser.add_argument('--int8', action='store_true', default=False,
                         help='enable ipex int8 path')
+    parser.add_argument('--benchmark', action='store_true', default=False,
+                        help='enable benchmark test model. False by default with mlperf running mode')
+    parser.add_argument('--batchsize', type=int, default=1,
+                        help='batchsize to run the benchmark')
+    parser.add_argument('--steps', type=int, default=30,
+                        help='total running steps')
+    parser.add_argument('--warmup_steps', type=int, default=10,
+                        help='warm up steps')
     args = parser.parse_args()
     return args
 
@@ -77,10 +85,8 @@ scenario_map = {
 }
 
 
-def main():
-    args = get_args()
-    print(args)
-
+def main_mlperf(args):
+    print("Start the main_mlperf")
     if args.backend == "pytorch":
         from pytorch_SUT import get_pytorch_sut
         sut = get_pytorch_sut(args.model_dir, args.preprocessed_data_dir,
@@ -136,6 +142,21 @@ def main():
     print("Destroying QSL...")
     lg.DestroyQSL(sut.qsl.qsl)
 
+def main_benchmark(args):
+    print("Start the main_benchmark")
+    from pytorch_SUT import get_pytorch_sut
+    sut = get_pytorch_sut(args.model_dir, args.preprocessed_data_dir,
+                          args.performance_count, use_ipex=args.ipex,
+                          use_int8=args.int8, calibration=args.calibration, configure_dir=args.configure_dir)
+    sut.benchmark(args.batchsize, args.steps, args.warmup_steps)
+
+def main():
+    args = get_args()
+    print(args)
+    if args.benchmark and not args.accuracy:
+        main_benchmark(args)
+    else:
+        main_mlperf(args)
 
 if __name__ == "__main__":
     main()

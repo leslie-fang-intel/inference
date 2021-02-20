@@ -339,7 +339,7 @@
         "outputs_uint8_used": [
             false
         ],
-        "quantized": true
+        "quantized": false
     },
     {
         "id": 18,
@@ -472,7 +472,7 @@
         "outputs_uint8_used": [
             false
         ],
-        "quantized": true
+        "quantized": false
     },
     {
         "id": 25,
@@ -491,7 +491,7 @@
         "outputs_uint8_used": [
             false
         ],
-        "quantized": true
+        "quantized": false
     },
     {
         "id": 26,
@@ -510,6 +510,6 @@
         "outputs_uint8_used": [
             false
         ],
-        "quantized": true
+        "quantized": false
     }
 ]

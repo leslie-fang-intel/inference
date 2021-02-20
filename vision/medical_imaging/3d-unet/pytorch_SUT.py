@@ -73,8 +73,12 @@ class _3DUNET_PyTorch_SUT():
                     conf = ipex.AmpConf(torch.bfloat16)
 
             model = self.trainer.network
+            #print(type(model))
+            #model.eval()
+            #torch.save(model, "test.pth")
             if self.use_ipex:
                 model = model.to(device = ipex.DEVICE)
+                model.eval()
             else:
                 from torch.utils import mkldnn as mkldnn_utils
                 model = mkldnn_utils.to_mkldnn(model)
@@ -85,11 +89,15 @@ class _3DUNET_PyTorch_SUT():
                 print("Processing sample id {:d} with shape = {:}".format(query_samples[i].index, data.shape))
                 image = torch.from_numpy(data[np.newaxis,...]).float().to(self.device)
 
+                #print(image.size())#torch.Size([1, 4, 224, 224, 160])
+                #dummy data
+                #image = torch.randn(28, 4, 224, 224, 160).float().to(self.device)
+
                 start_time = time.time()
                 if self.use_ipex and self.use_int8 and self.calibration:
                     # INT8 calibration
-                    image = image.to(device = ipex.DEVICE)
                     with ipex.AutoMixPrecision(conf, running_mode="calibration"):
+                        image = image.to(device = ipex.DEVICE)
                         output = model(image)
                 elif self.use_ipex and self.use_int8:
                     # INT8 inference
@@ -102,6 +110,11 @@ class _3DUNET_PyTorch_SUT():
                     with ipex.AutoMixPrecision(conf, running_mode="inference"):
                         output = model(image)
                 else:
+                    #with torch.autograd.profiler.profile() as prof:
+                    #    output = model(image)
+                    #with open("fp32.prof", "w") as prof_f:
+                    #    prof_f.write(prof.key_averages().table(sort_by="cpu_time_total"))
+                    #    prof.export_chrome_trace("fp32.json")
                     output = model(image)
                 end_time = time.time()
 
@@ -128,6 +141,70 @@ class _3DUNET_PyTorch_SUT():
 
     def process_latencies(self, latencies_ns):
         pass
+
+    def benchmark(self, batchsize, steps, warmup_steps):
+        with torch.no_grad():
+            import intel_pytorch_extension as ipex
+
+            conf = None
+            if self.use_ipex:
+                if self.use_int8 and self.calibration:
+                    # INT8 calibration
+                    conf = ipex.AmpConf(torch.int8)
+                elif self.use_int8:
+                    # INT8 inference
+                    conf = ipex.AmpConf(torch.int8, self.configure_dir)
+                else:
+                    # BF16 inference
+                    conf = ipex.AmpConf(torch.bfloat16)
+
+            model = self.trainer.network
+
+            if self.use_ipex:
+                model = model.to(device = ipex.DEVICE)
+                model.eval()
+            else:
+                from torch.utils import mkldnn as mkldnn_utils
+                model = mkldnn_utils.to_mkldnn(model)
+
+            total_time = 0
+            total_images = 0
+            for i in range(steps):
+                #dummy data
+                image = torch.randn(batchsize, 4, 224, 224, 160).float().to(self.device)
+                print("Processing image with shape = {:}".format(image.size()))
+                
+                start_time = time.time()
+                if self.use_ipex and self.use_int8 and self.calibration:
+                    # INT8 calibration
+                    with ipex.AutoMixPrecision(conf, running_mode="calibration"):
+                        image = image.to(device = ipex.DEVICE)
+                        output = model(image)
+                elif self.use_ipex and self.use_int8:
+                    # INT8 inference
+                    image = image.to(device = ipex.DEVICE)
+                    with ipex.AutoMixPrecision(conf, running_mode="inference"):
+                        output = model(image)
+                elif self.use_ipex:
+                    # BF16 inference
+                    image = image.to(device = ipex.DEVICE)
+                    with ipex.AutoMixPrecision(conf, running_mode="inference"):
+                        output = model(image)
+                else:
+                    #with torch.autograd.profiler.profile() as prof:
+                    #    output = model(image)
+                    #with open("fp32.prof", "w") as prof_f:
+                    #    prof_f.write(prof.key_averages().table(sort_by="cpu_time_total"))
+                    #    prof.export_chrome_trace("fp32.json")
+                    output = model(image)
+                end_time = time.time()
+                if i > warmup_steps:
+                    total_images += batchsize
+                    total_time += end_time-start_time
+
+                print("Running time for one batchsize sample is: {}".format(end_time-start_time))
+            print("Finish the benchmark test with dummy data")
+            print("throughput is: {} samples/second".format(total_images/total_time))
 
 def get_pytorch_sut(model_dir, preprocessed_data_dir, performance_count, folds=1, checkpoint_name="model_final_checkpoint", use_ipex=False,
                            use_int8=False, calibration=False, configure_dir="configure.json"):

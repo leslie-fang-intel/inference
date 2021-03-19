@@ -56,6 +56,8 @@ def parse_args():
                         help="using  dummu data to test the performance of inference")
     parser.add_argument('-w', '--warmup-iterations', default=0, type=int, metavar='N',
                         help='number of warmup iterations to run')
+    parser.add_argument('--autocast', action='store_true', default=False,
+                        help='enable autocast')
     return parser.parse_args()
 
 
@@ -230,15 +232,37 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                 img = img.to('cuda')
             elif args.ipex:
                 img = img.to(ipex.DEVICE)
-            for nbatch in range(args.iteration):
-                with torch.no_grad():
-                    if nbatch >= args.warmup_iterations:
-                        start_time=time.time()
-                    ploc, plabel,_ = model(img)
-                    if nbatch >= args.warmup_iterations:
-                        inference_time.update(time.time() - start_time)
-                    if nbatch % args.print_freq == 0:
-                        progress.display(nbatch)
+            if args.autocast:
+                print('autocast enabled')
+                with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)):
+                    for nbatch in range(args.iteration):
+                        print("nbatch: {}".format(nbatch))
+                        with torch.no_grad():
+                            if nbatch >= args.warmup_iterations:
+                                start_time=time.time()
+                            if nbatch == 5:
+                                print("Profilling")
+                                with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                    ploc, plabel,_ = model(img)
+                                print(prof.key_averages().table(sort_by="self_cpu_time_total"))
+                                prof.export_chrome_trace("torch_throughput.json")
+                            else:
+                                ploc, plabel,_ = model(img)
+                            if nbatch >= args.warmup_iterations:
+                                inference_time.update(time.time() - start_time)
+                            if nbatch % args.print_freq == 0:
+                                progress.display(nbatch)
+            else:
+                print('autocast disabled')
+                for nbatch in range(args.iteration):
+                    with torch.no_grad():
+                        if nbatch >= args.warmup_iterations:
+                            start_time=time.time()
+                        ploc, plabel,_ = model(img)
+                        if nbatch >= args.warmup_iterations:
+                            inference_time.update(time.time() - start_time)
+                        if nbatch % args.print_freq == 0:
+                            progress.display(nbatch)
         else:
             print('runing fp32 real inputs path')
             for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):

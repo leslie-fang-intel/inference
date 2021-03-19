@@ -20,7 +20,7 @@ from math import sqrt, ceil
 if os.environ.get('USE_IPEX') == "1":
     import intel_pytorch_extension as ipex
 
-from intel_pytorch_extension import batch_score_nms
+#from intel_pytorch_extension import batch_score_nms
 
 # This function is from https://github.com/kuangliu/pytorch-ssd.
 def calc_iou_tensor(box1, box2):
@@ -163,10 +163,10 @@ class Encoder(object):
         for bbox, prob in zip(bboxes.split(1, 0), probs.split(1, 0)):
             bbox = bbox.squeeze(0)
             prob = prob.squeeze(0)
-            if bbox.device == torch.device(ipex.DEVICE):
-                output.append(self.decode_single_ipex(bbox, prob, criteria, max_output))
-            else:
-                output.append(self.decode_single(bbox, prob, criteria, max_output))
+            #if bbox.device == torch.device(ipex.DEVICE):
+            #    output.append(self.decode_single_ipex(bbox, prob, criteria, max_output))
+            #else:
+            output.append(self.decode_single(bbox, prob, criteria, max_output))
             #print(output[-1])
         return output
 

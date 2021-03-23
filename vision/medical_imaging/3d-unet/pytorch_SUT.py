@@ -79,19 +79,22 @@ class _3DUNET_PyTorch_SUT():
             #torch.save(model, "test.pth")
             if self.use_ipex:
                 #model = model.to(device = ipex.DEVICE)
-                mode.eval()
+                model.eval()
                 if self.use_jit:
-                    print("trace not support jit.trace bf16")
+                    print("accuracy ipex; jit")
                     image = torch.randn(1, 4, 224, 224, 160).float()
                     model = torch.jit.trace(model, image)
                     #model = model.to(self.device)
                     print(model)
+                else:
+                    print("accuracy ipex; no jit")
                 model = model.to(device = ipex.DEVICE)
             elif self.use_jit:
                 print("use fp32 jit")
                 image = torch.randn(1, 4, 224, 224, 160).float().to(self.device)
                 model = torch.jit.trace(model, image)
             else:
+                print("fp32 mkldnn")
                 from torch.utils import mkldnn as mkldnn_utils
                 model = mkldnn_utils.to_mkldnn(model)
 
@@ -176,9 +179,11 @@ class _3DUNET_PyTorch_SUT():
                 #model = model.to(device = ipex.DEVICE)
                 model.eval()
                 if self.use_jit:
-                    print("trace to support ipex xpu device")
+                    print("ipex xpu device; jit")
                     image = torch.randn(batchsize, 4, 224, 224, 160).float()
                     model = torch.jit.trace(model, image)
+                else:
+                    print("ipex xpu device; no jit")
                 model = model.to(device = ipex.DEVICE)
                     #model = torch.jit.script(model)
                 #model.eval()
@@ -187,6 +192,7 @@ class _3DUNET_PyTorch_SUT():
                 image = torch.randn(batchsize, 4, 224, 224, 160).float().to(self.device)
                 model = torch.jit.trace(model, image)
             else:
+                print("fp32 mkldnn")
                 from torch.utils import mkldnn as mkldnn_utils
                 model = mkldnn_utils.to_mkldnn(model)
 

@@ -75,6 +75,8 @@ def get_args():
                         help='warm up steps')
     parser.add_argument('--autocast', action='store_true', default=False,
                         help='enable autocast')
+    parser.add_argument('--jit', action='store_true', default=False,
+                        help='enable jit')
     args = parser.parse_args()
     return args
 
@@ -93,7 +95,7 @@ def main_mlperf(args):
         from pytorch_SUT import get_pytorch_sut
         sut = get_pytorch_sut(args.model_dir, args.preprocessed_data_dir,
                               args.performance_count, use_ipex=args.ipex,
-                              use_int8=args.int8, calibration=args.calibration, configure_dir=args.configure_dir, use_autocast=args.autocast)
+                              use_int8=args.int8, calibration=args.calibration, configure_dir=args.configure_dir, use_autocast=args.autocast, use_jit=args.jit)
     elif args.backend == "onnxruntime":
         from onnxruntime_SUT import get_onnxruntime_sut
         sut = get_onnxruntime_sut(args.model, args.preprocessed_data_dir,
@@ -149,7 +151,7 @@ def main_benchmark(args):
     from pytorch_SUT import get_pytorch_sut
     sut = get_pytorch_sut(args.model_dir, args.preprocessed_data_dir,
                           args.performance_count, use_ipex=args.ipex,
-                          use_int8=args.int8, calibration=args.calibration, configure_dir=args.configure_dir, use_autocast=args.autocast)
+                          use_int8=args.int8, calibration=args.calibration, configure_dir=args.configure_dir, use_autocast=args.autocast, use_jit=args.jit)
     sut.benchmark(args.batchsize, args.steps, args.warmup_steps)
 
 def main():

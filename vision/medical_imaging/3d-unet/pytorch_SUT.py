@@ -32,7 +32,7 @@ from nnunet.training.model_restore import load_model_and_checkpoint_files
 
 class _3DUNET_PyTorch_SUT():
     def __init__(self, model_dir, preprocessed_data_dir, performance_count, folds, checkpoint_name, use_ipex,
-                     use_int8, calibration, configure_dir, use_autocast):
+                     use_int8, calibration, configure_dir, use_autocast, use_jit):
 
         print("Loading PyTorch model...")
         model_path = os.path.join(model_dir, "plans.pkl")
@@ -51,6 +51,7 @@ class _3DUNET_PyTorch_SUT():
         self.calibration = calibration
         self.configure_dir = configure_dir
         self.use_autocast = use_autocast
+        self.use_jit = use_jit
 
     def issue_queries(self, query_samples):
         with torch.no_grad():
@@ -78,6 +79,13 @@ class _3DUNET_PyTorch_SUT():
             if self.use_autocast:
                 # use autocast
                 model.eval()
+                if self.use_jit:
+                    print("Enable jit")
+                    image = torch.randn(1, 4, 224, 224, 160).float().to(self.device)
+                    with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)):
+                        model = torch.jit.trace(model, image)
+                    print(model.graph_for(image))
+                    return
                 with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)):
                     print("Enable autocast in accuracy")
                     for i in range(len(query_samples)):
@@ -122,6 +130,14 @@ class _3DUNET_PyTorch_SUT():
             if self.use_ipex:
                 model = model.to(device = ipex.DEVICE)
                 model.eval()
+            elif self.use_jit:
+                print("Enable jit")
+                model.eval()
+                image = torch.randn(1, 4, 224, 224, 160).float().to(self.device)
+                model = torch.jit.trace(model, image)
+                #print(model)
+                print(model.graph_for(image))
+                #return
             else:
                 from torch.utils import mkldnn as mkldnn_utils
                 model = mkldnn_utils.to_mkldnn(model)
@@ -206,6 +222,13 @@ class _3DUNET_PyTorch_SUT():
             if self.use_autocast:
                 # use autocast
                 model.eval()
+                if self.use_jit:
+                    print("Benchmark enable autocast jit")
+                    image = torch.randn(batchsize, 4, 224, 224, 160).float().to(self.device)
+                    with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)):
+                        model = torch.jit.trace(model, image)
+                    print(model.graph_for(image))
+                    return
                 total_time = 0
                 total_images = 0
                 with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)):
@@ -235,6 +258,13 @@ class _3DUNET_PyTorch_SUT():
             if self.use_ipex:
                 model = model.to(device = ipex.DEVICE)
                 model.eval()
+            elif self.use_jit:
+                print("fp32 jit path")
+                model.eval()
+                image = torch.randn(batchsize, 4, 224, 224, 160).float().to(self.device)
+                model = torch.jit.trace(model, image)
+                print(model.graph_for(image))
+                #return
             else:
                 from torch.utils import mkldnn as mkldnn_utils
                 model = mkldnn_utils.to_mkldnn(model)
@@ -279,6 +309,6 @@ class _3DUNET_PyTorch_SUT():
             print("throughput is: {} samples/second".format(total_images/total_time))
 
 def get_pytorch_sut(model_dir, preprocessed_data_dir, performance_count, folds=1, checkpoint_name="model_final_checkpoint", use_ipex=False,
-                           use_int8=False, calibration=False, configure_dir="configure.json", use_autocast=False):
+                           use_int8=False, calibration=False, configure_dir="configure.json", use_autocast=False, use_jit=False):
     return _3DUNET_PyTorch_SUT(model_dir, preprocessed_data_dir, performance_count, folds, checkpoint_name, use_ipex,
-                               use_int8, calibration, configure_dir, use_autocast)
+                               use_int8, calibration, configure_dir, use_autocast, use_jit)

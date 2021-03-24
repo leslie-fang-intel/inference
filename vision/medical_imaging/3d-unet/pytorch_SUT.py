@@ -85,7 +85,44 @@ class _3DUNET_PyTorch_SUT():
                     with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)):
                         model = torch.jit.trace(model, image)
                     print(model.graph_for(image))
+                    for i in range(len(query_samples)):
+                        data = self.qsl.get_features(query_samples[i].index)
+
+                        print("Processing sample id {:d} with shape = {:}".format(query_samples[i].index, data.shape))
+                        image = torch.from_numpy(data[np.newaxis,...]).float().to(self.device)
+
+                        #print(image.size())#torch.Size([1, 4, 224, 224, 160])
+                        #dummy data
+                        #image = torch.randn(28, 4, 224, 224, 160).float().to(self.device)
+
+                        start_time = time.time()
+
+                        #with torch.autograd.profiler.profile() as prof:
+                        #    output = model(image)
+                        #with open("fp32.prof", "w") as prof_f:
+                        #    prof_f.write(prof.key_averages().table(sort_by="cpu_time_total"))
+                        #    prof.export_chrome_trace("fp32.json")
+                        output = model(image)
+                        #print(type(model))
+                        end_time = time.time()
+
+                        print("Running time for one sample is: {}".format(end_time-start_time))
+
+                        #print(output[0].cpu().numpy())
+
+                        output = output[0].to(torch.float32).cpu().numpy().astype(np.float16)
+
+                        transpose_forward = self.trainer.plans.get("transpose_forward")
+                        transpose_backward = self.trainer.plans.get("transpose_backward")
+                        assert transpose_forward == [0, 1, 2], "Unexpected transpose_forward {:}".format(transpose_forward)
+                        assert transpose_backward == [0, 1, 2], "Unexpected transpose_backward {:}".format(transpose_backward)
+
+                        response_array = array.array("B", output.tobytes())
+                        bi = response_array.buffer_info()
+                        response = lg.QuerySampleResponse(query_samples[i].id, bi[0], bi[1])
+                        lg.QuerySamplesComplete([response])
                     return
+
                 with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)):
                     print("Enable autocast in accuracy")
                     for i in range(len(query_samples)):
@@ -222,29 +259,68 @@ class _3DUNET_PyTorch_SUT():
             if self.use_autocast:
                 # use autocast
                 model.eval()
+                #print(model)
+                #onnx_path = "onnx_model_name.onnx"
+                #torch.onnx.export(model, torch.randn(batchsize, 4, 224, 224, 160), onnx_path)
+                #return
                 if self.use_jit:
                     print("Benchmark enable autocast jit")
                     image = torch.randn(batchsize, 4, 224, 224, 160).float().to(self.device)
-                    with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)):
+                    with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)), torch.no_grad():
+                        #import pdb
+                        #pdb.set_trace()
+                        #pass
+                        #model = torch.jit.trace(model, image, check_trace=False)
                         model = torch.jit.trace(model, image)
+                    print(model)
+                    #torch.onnx.export(model, torch.randn(batchsize, 4, 224, 224, 160), "/root/script_unset.onnx")
                     print(model.graph_for(image))
-                    return
-                total_time = 0
-                total_images = 0
-                with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)):
-                    print("Enable autocast in benchmark dummy data")
+                    #return
+                    total_time = 0
+                    total_images = 0
+                    #print("Enable jit autocast in benchmark dummy data")
                     for i in range(steps):
+                        #print(i)
                         #dummy data
                         image = torch.randn(batchsize, 4, 224, 224, 160).float().to(self.device)
                         print("Processing image with shape = {:}".format(image.size()))
                         
                         start_time = time.time()
-                        #with torch.autograd.profiler.profile() as prof:
-                        #    output = model(image)
-                        #with open("fp32.prof", "w") as prof_f:
-                        #    prof_f.write(prof.key_averages().table(sort_by="cpu_time_total"))
-                        #    prof.export_chrome_trace("fp32.json")
-                        output = model(image)
+                        if i == 2:
+                            with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                output = model(image)
+                            print(prof.key_averages().table(sort_by="self_cpu_time_total"))
+                            prof.export_chrome_trace("torch_throughput.json")
+                        else:
+                            output = model(image)
+                        end_time = time.time()
+                        if i > warmup_steps:
+                            total_images += batchsize
+                            total_time += end_time-start_time
+
+                        print("Running time for one batchsize sample is: {}".format(end_time-start_time))
+                    print("Finish the benchmark test with dummy data")
+                    print("throughput is: {} samples/second".format(total_images/total_time))
+                    return
+
+                total_time = 0
+                total_images = 0
+                with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)):
+                    print("Enable autocast in benchmark dummy data")
+                    for i in range(steps):
+                        #print(i)
+                        #dummy data
+                        image = torch.randn(batchsize, 4, 224, 224, 160).float().to(self.device)
+                        print("Processing image with shape = {:}".format(image.size()))
+                        
+                        start_time = time.time()
+                        if i == 2:
+                            with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                output = model(image)
+                            print(prof.key_averages().table(sort_by="self_cpu_time_total"))
+                            prof.export_chrome_trace("torch_throughput.json")
+                        else:
+                            output = model(image)
                         end_time = time.time()
                         if i > warmup_steps:
                             total_images += batchsize

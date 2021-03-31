@@ -60,7 +60,8 @@ class _3DUNET_PyTorch_SUT():
             #from torch.utils import mkldnn as mkldnn_utils
             #mkldnn_model = mkldnn_utils.to_mkldnn(self.trainer.network)
             #print(mkldnn_model)
-            import intel_pytorch_extension as ipex
+            if self.use_ipex:
+                import intel_pytorch_extension as ipex
 
             conf = None
             if self.use_ipex:
@@ -176,8 +177,11 @@ class _3DUNET_PyTorch_SUT():
                 print(model.graph_for(image))
                 #return
             else:
-                from torch.utils import mkldnn as mkldnn_utils
-                model = mkldnn_utils.to_mkldnn(model)
+                #print("pass-----------")
+                #print(model)
+                pass
+                #from torch.utils import mkldnn as mkldnn_utils
+                #model = mkldnn_utils.to_mkldnn(model)
 
             for i in range(len(query_samples)):
                 data = self.qsl.get_features(query_samples[i].index)
@@ -240,7 +244,8 @@ class _3DUNET_PyTorch_SUT():
 
     def benchmark(self, batchsize, steps, warmup_steps):
         with torch.no_grad():
-            import intel_pytorch_extension as ipex
+            if self.use_ipex:
+                import intel_pytorch_extension as ipex
 
             conf = None
             if self.use_ipex:
@@ -342,8 +347,9 @@ class _3DUNET_PyTorch_SUT():
                 print(model.graph_for(image))
                 #return
             else:
-                from torch.utils import mkldnn as mkldnn_utils
-                model = mkldnn_utils.to_mkldnn(model)
+                pass
+                #from torch.utils import mkldnn as mkldnn_utils
+                #model = mkldnn_utils.to_mkldnn(model)
 
             total_time = 0
             total_images = 0

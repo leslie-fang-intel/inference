@@ -259,6 +259,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
             print('runing bf16 real inputs path')
             conf = ipex.AmpConf(torch.bfloat16)
             for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
+                print("nbatch: {}".format(nbatch))
                 with torch.no_grad():
                     with ipex.AutoMixPrecision(conf, running_mode="inference"):
                         if use_cuda:
@@ -277,11 +278,12 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                             prof.export_chrome_trace("torch_throughput.json")
                         else:
                             ploc, plabel,_ = model(img)
-
+                        
                         #ploc, plabel,_ = model(img)
                         if nbatch >= args.warmup_iterations:
                             inference_time.update(time.time() - start_time)
                             end_time = time.time()
+
                         try:
                             results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
                         except:

@@ -26,6 +26,9 @@ if [ "$1" == "int8" ]; then
     ARGS="$ARGS --int8"
     CONFIG_FILE="$CONFIG_FILE --configure-dir $3"
     echo "### running int8 datatype"
+elif [ "$1" == "bf16" ]; then
+    ARGS="$ARGS --bf16"
+    echo "### running bf16 datatype"
 else
     echo "### running fp32 datatype"
 fi
@@ -46,7 +49,7 @@ CORES_PER_INSTANCE=$CORES
 
 KMP_SETTING="KMP_AFFINITY=granularity=fine,compact,1,0"
 
-BATCH_SIZE=32
+BATCH_SIZE=1
 
 export OMP_NUM_THREADS=$CORES_PER_INSTANCE
 export $KMP_SETTING

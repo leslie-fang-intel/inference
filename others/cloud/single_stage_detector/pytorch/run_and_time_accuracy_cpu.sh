@@ -28,6 +28,9 @@ if [ "$1" == "int8" ]; then
     ARGS="$ARGS --int8"
     CONFIG_FILE="$CONFIG_FILE --configure-dir $3"
     echo "### running int8 datatype"
+elif [ "$1" == "bf16" ]; then
+    ARGS="$ARGS --bf16"
+    echo "### running bf16 datatype"
 else
     echo "### running fp32 datatype"
 fi

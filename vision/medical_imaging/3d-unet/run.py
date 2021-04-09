@@ -133,7 +133,7 @@ def main_mlperf(args):
     print("Running Loadgen test...")
     lg.StartTestWithLogSettings(sut.sut, sut.qsl.qsl, settings, log_settings)
 
-    if args.accuracy:
+    if args.accuracy and not args.calibration:
         print("Running accuracy script...")
         cmd = "python3 accuracy-brats.py"
         subprocess.check_call(cmd, shell=True)

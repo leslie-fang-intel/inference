@@ -60,7 +60,7 @@ class _3DUNET_PyTorch_SUT():
             #from torch.utils import mkldnn as mkldnn_utils
             #mkldnn_model = mkldnn_utils.to_mkldnn(self.trainer.network)
             #print(mkldnn_model)
-            if self.use_ipex:
+            if self.use_ipex or self.use_autocast:
                 import intel_pytorch_extension as ipex
 
             conf = None
@@ -124,8 +124,73 @@ class _3DUNET_PyTorch_SUT():
                         lg.QuerySamplesComplete([response])
                     return
 
+                if self.use_int8 and self.calibration:
+                    print("start int8 calibration")
+                    model = ipex.fx.conv_bn_fuse(model)
+                    conf = ipex.AmpConf(torch.int8)
+                    with torch.no_grad():
+                        for i in range(len(query_samples)):
+                            data = self.qsl.get_features(query_samples[i].index)
+
+                            print("Processing sample id {:d} with shape = {:}".format(query_samples[i].index, data.shape))
+                            image = torch.from_numpy(data[np.newaxis,...]).float().to(self.device)
+
+                            start_time = time.time()
+                            with ipex.amp.calibrate():
+                                output = model(image)
+                            end_time = time.time()
+
+                            print("Running time for one sample is: {}".format(end_time-start_time))
+
+                            output = output[0].to(torch.float32).cpu().numpy().astype(np.float16)
+
+                            transpose_forward = self.trainer.plans.get("transpose_forward")
+                            transpose_backward = self.trainer.plans.get("transpose_backward")
+                            assert transpose_forward == [0, 1, 2], "Unexpected transpose_forward {:}".format(transpose_forward)
+                            assert transpose_backward == [0, 1, 2], "Unexpected transpose_backward {:}".format(transpose_backward)
+
+                            response_array = array.array("B", output.tobytes())
+                            bi = response_array.buffer_info()
+                            response = lg.QuerySampleResponse(query_samples[i].id, bi[0], bi[1])
+                            lg.QuerySamplesComplete([response])
+                    conf.save(self.configure_dir)
+                    return
+                
+                if self.use_int8:
+                    print("start int8 accuracy testing")
+                    conf = ipex.AmpConf(torch.int8, self.configure_dir)
+                    jit_image = torch.randn(1, 4, 224, 224, 160).float().to(self.device)
+                    with torch.no_grad(), ipex.amp.autocast(enabled=True, configure=conf):
+                        trace_model = torch.jit.trace(model, jit_image, check_trace=False)
+                    with torch.no_grad():
+                        for i in range(len(query_samples)):
+                            data = self.qsl.get_features(query_samples[i].index)
+
+                            print("Processing sample id {:d} with shape = {:}".format(query_samples[i].index, data.shape))
+                            image = torch.from_numpy(data[np.newaxis,...]).float().to(self.device)
+
+                            start_time = time.time()
+
+                            output = trace_model(image)
+                            end_time = time.time()
+
+                            print("Running time for one sample is: {}".format(end_time-start_time))
+
+                            output = output[0].to(torch.float32).cpu().numpy().astype(np.float16)
+
+                            transpose_forward = self.trainer.plans.get("transpose_forward")
+                            transpose_backward = self.trainer.plans.get("transpose_backward")
+                            assert transpose_forward == [0, 1, 2], "Unexpected transpose_forward {:}".format(transpose_forward)
+                            assert transpose_backward == [0, 1, 2], "Unexpected transpose_backward {:}".format(transpose_backward)
+
+                            response_array = array.array("B", output.tobytes())
+                            bi = response_array.buffer_info()
+                            response = lg.QuerySampleResponse(query_samples[i].id, bi[0], bi[1])
+                            lg.QuerySamplesComplete([response])
+                    return
+
                 with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)):
-                    print("Enable autocast in accuracy")
+                    print("Enable bf16 autocast in accuracy")
                     for i in range(len(query_samples)):
                         data = self.qsl.get_features(query_samples[i].index)
 
@@ -244,7 +309,7 @@ class _3DUNET_PyTorch_SUT():
 
     def benchmark(self, batchsize, steps, warmup_steps):
         with torch.no_grad():
-            if self.use_ipex:
+            if self.use_ipex or self.use_autocast:
                 import intel_pytorch_extension as ipex
 
             conf = None

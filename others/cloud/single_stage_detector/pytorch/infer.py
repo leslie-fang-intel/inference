@@ -259,7 +259,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
             print('runing bf16 real inputs path')
             conf = ipex.AmpConf(torch.bfloat16)
             for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
-                print("nbatch: {}".format(nbatch))
+                #print("nbatch: {}".format(nbatch))
                 with torch.no_grad():
                     with ipex.AutoMixPrecision(conf, running_mode="inference"):
                         if use_cuda:

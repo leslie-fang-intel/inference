@@ -158,7 +158,7 @@ class Encoder(object):
         return bboxes_in, F.softmax(scores_in, dim=-1)
 
     def decode_batch(self, bboxes_in, scores_in,  criteria = 0.45, max_output=200,device=0):
-        bboxes, probs = self.scale_back_batch(bboxes_in.cpu(), scores_in.cpu(), device)
+        bboxes, probs = self.scale_back_batch(bboxes_in, scores_in, device)
         output = []
         for bbox, prob in zip(bboxes.split(1, 0), probs.split(1, 0)):
             bbox = bbox.squeeze(0)
@@ -178,9 +178,8 @@ class Encoder(object):
         bboxes_out = []
         scores_out = []
         labels_out = []
-        return_cpu_tensor = True
 
-        bboxes_out, labels_out, scores_out = batch_score_nms(bboxes_in, scores_in, criteria, return_cpu_tensor)
+        bboxes_out, labels_out, scores_out = batch_score_nms(bboxes_in, scores_in, criteria)
 
         _, max_ids = scores_out.sort(dim=0)
         max_ids = max_ids[-max_output:]

@@ -259,7 +259,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
             print('runing bf16 real inputs path')
             conf = ipex.AmpConf(torch.bfloat16)
             for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
-                #print("nbatch: {}".format(nbatch))
+                print("nbatch: {}".format(nbatch))
                 with torch.no_grad():
                     with ipex.AutoMixPrecision(conf, running_mode="inference"):
                         if use_cuda:
@@ -284,31 +284,31 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                             inference_time.update(time.time() - start_time)
                             end_time = time.time()
 
-                        try:
-                            results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
-                        except:
-                            print("No object detected in idx: {}".format(idx))
-                            continue
-                        if nbatch >= args.warmup_iterations:
-                            decoding_time.update(time.time() - end_time)
-                        (htot, wtot) = [d.cpu().numpy() for d in img_size]
-                        img_id = img_id.cpu().numpy()
-                        # Iterate over batch elements
-                        for img_id_, wtot_, htot_, result in zip(img_id, wtot, htot, results):
-                            loc, label, prob = [r.cpu().numpy() for r in result]
-                            # Iterate over image detections
-                            for loc_, label_, prob_ in zip(loc, label, prob):
-                                ret.append([img_id_, loc_[0]*wtot_, \
-                                            loc_[1]*htot_,
-                                            (loc_[2] - loc_[0])*wtot_,
-                                            (loc_[3] - loc_[1])*htot_,
-                                            prob_,
-                                            inv_map[label_]])
+                    try:
+                        results = encoder.decode_batch(ploc.cpu(), plabel.cpu(), 0.50, 200, device=device)
+                    except:
+                        print("No object detected in idx: {}".format(idx))
+                        continue
+                    if nbatch >= args.warmup_iterations:
+                        decoding_time.update(time.time() - end_time)
+                    (htot, wtot) = [d.cpu().numpy() for d in img_size]
+                    img_id = img_id.cpu().numpy()
+                    # Iterate over batch elements
+                    for img_id_, wtot_, htot_, result in zip(img_id, wtot, htot, results):
+                        loc, label, prob = [r.cpu().numpy() for r in result]
+                        # Iterate over image detections
+                        for loc_, label_, prob_ in zip(loc, label, prob):
+                            ret.append([img_id_, loc_[0]*wtot_, \
+                                        loc_[1]*htot_,
+                                        (loc_[2] - loc_[0])*wtot_,
+                                        (loc_[3] - loc_[1])*htot_,
+                                        prob_,
+                                        inv_map[label_]])
 
-                        if nbatch % args.print_freq == 0:
-                            progress.display(nbatch)
-                        if nbatch == args.iteration:
-                            break
+                    if nbatch % args.print_freq == 0:
+                        progress.display(nbatch)
+                    if nbatch == args.iteration:
+                        break
     else:
         if args.dummy:
             print('runing fp32 dummy inputs inference path')

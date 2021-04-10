@@ -178,8 +178,9 @@ class Encoder(object):
         bboxes_out = []
         scores_out = []
         labels_out = []
+        return_cpu_tensor = True
 
-        bboxes_out, labels_out, scores_out = batch_score_nms(bboxes_in, scores_in, criteria)
+        bboxes_out, labels_out, scores_out = batch_score_nms(bboxes_in, scores_in, criteria, return_cpu_tensor)
 
         _, max_ids = scores_out.sort(dim=0)
         max_ids = max_ids[-max_output:]

@@ -158,7 +158,7 @@ class Encoder(object):
         return bboxes_in, F.softmax(scores_in, dim=-1)
 
     def decode_batch(self, bboxes_in, scores_in,  criteria = 0.45, max_output=200,device=0):
-        bboxes, probs = self.scale_back_batch(bboxes_in, scores_in,device)
+        bboxes, probs = self.scale_back_batch(bboxes_in.cpu(), scores_in.cpu(), device)
         output = []
         for bbox, prob in zip(bboxes.split(1, 0), probs.split(1, 0)):
             bbox = bbox.squeeze(0)

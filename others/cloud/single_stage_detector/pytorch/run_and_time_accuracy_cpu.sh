@@ -20,7 +20,7 @@ if [ "x$MODEL_DIR" == "x"  ]; then
     echo "MODEL_DIR not set" && exit 1
 fi
 
-BATCH_SIZE=32
+BATCH_SIZE=1
 
 CONFIG_FILE=""
 ARGS=""

@@ -58,6 +58,8 @@ def parse_args():
                         help='number of warmup iterations to run')
     parser.add_argument('--autocast', action='store_true', default=False,
                         help='enable autocast')
+    parser.add_argument('--profile', action='store_true', default=False,
+                        help='enable profile')
     return parser.parse_args()
 
 
@@ -264,12 +266,19 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                         if nbatch % args.print_freq == 0:
                             progress.display(nbatch)
         else:
-            print('runing fp32 real inputs path')
+            print('runing real inputs path')
             if args.autocast:
-                print('autocast enabled')
-                with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)):
+                print('bf16 autocast enabled')
+                if args.jit:
+                    print('autocast jit path')
+                    #model = ipex.optimize(model, dtype=torch.bfloat16, level="O1")
+                    with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)), torch.no_grad(): 
+                        model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200)) 
+                    model = torch.jit.freeze(model)
+                    print("start inference")
                     for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
                         print("nbatch: {}".format(nbatch))
+
                         with torch.no_grad():
                             if use_cuda:
                                 img = img.to('cuda')
@@ -278,12 +287,20 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
 
                             if nbatch >= args.warmup_iterations:
                                 start_time=time.time()
-                            ploc, plabel,_ = model(img)
+                            if args.profile and nbatch == 100:
+                                print("Profilling")
+                                with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                    ploc, plabel = model(img)
+                                print(prof.key_averages().table(sort_by="self_cpu_time_total"))
+                                prof.export_chrome_trace("torch_throughput.json")
+                            else:
+                                ploc, plabel = model(img)
                             if nbatch >= args.warmup_iterations:
                                 inference_time.update(time.time() - start_time)
                                 end_time = time.time()
+
                             try:
-                                results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
+                                results = encoder.decode_batch(ploc.to(torch.float32), plabel.to(torch.float32), 0.50, 200,device=device)
                             except:
                                 print("No object detected in idx: {}".format(idx))
                                 continue
@@ -291,12 +308,9 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                 decoding_time.update(time.time() - end_time)
                             (htot, wtot) = [d.cpu().numpy() for d in img_size]
                             img_id = img_id.cpu().numpy()
-                            # Iterate over batch elements
-                            
-                            #results = results.to(torch.float32)
 
                             for img_id_, wtot_, htot_, result in zip(img_id, wtot, htot, results):
-                                loc, label, prob = [r.to(torch.float32).cpu().numpy() for r in result]
+                                loc, label, prob = [r.cpu().numpy() for r in result]
                                 # Iterate over image detections
                                 for loc_, label_, prob_ in zip(loc, label, prob):
                                     ret.append([img_id_, loc_[0]*wtot_, \
@@ -309,9 +323,57 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                             if nbatch % args.print_freq == 0:
                                 progress.display(nbatch)
                             if nbatch == args.iteration:
-                                break
+                                break 
+                else:
+                    print('autocast imperative path')
+                    with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)):
+                        for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
+                            print("nbatch: {}".format(nbatch))
+                            with torch.no_grad():
+                                if use_cuda:
+                                    img = img.to('cuda')
+                                elif args.ipex:
+                                    img = img.to(ipex.DEVICE)
+
+                                if nbatch >= args.warmup_iterations:
+                                    start_time=time.time()
+                                ploc, plabel = model(img)
+                                if nbatch >= args.warmup_iterations:
+                                    inference_time.update(time.time() - start_time)
+                                    end_time = time.time()
+                                
+                                with ipex.amp.autocast(enabled=False):
+                                    try:
+                                        results = encoder.decode_batch(ploc.to(torch.float32), plabel.to(torch.float32), 0.50, 200,device=device)
+                                    except:
+                                        print("No object detected in idx: {}".format(idx))
+                                        continue
+                                    if nbatch >= args.warmup_iterations:
+                                        decoding_time.update(time.time() - end_time)
+                                    (htot, wtot) = [d.cpu().numpy() for d in img_size]
+                                    img_id = img_id.cpu().numpy()
+
+                                    for img_id_, wtot_, htot_, result in zip(img_id, wtot, htot, results):
+                                        loc, label, prob = [r.cpu().numpy() for r in result]
+                                        # Iterate over image detections
+                                        for loc_, label_, prob_ in zip(loc, label, prob):
+                                            ret.append([img_id_, loc_[0]*wtot_, \
+                                                        loc_[1]*htot_,
+                                                        (loc_[2] - loc_[0])*wtot_,
+                                                        (loc_[3] - loc_[1])*htot_,
+                                                        prob_,
+                                                        inv_map[label_]])
+
+                                    if nbatch % args.print_freq == 0:
+                                        progress.display(nbatch)
+                                    if nbatch == args.iteration:
+                                        break
             else:
-                print('autocast disabled')
+                print('autocast disabled, fp32 is used')
+                if args.jit:
+                    print("enable jit")
+                    with torch.no_grad():
+                        model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200))
                 for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
                     with torch.no_grad():
                         if use_cuda:
@@ -321,7 +383,14 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
 
                         if nbatch >= args.warmup_iterations:
                             start_time=time.time()
-                        ploc, plabel,_ = model(img)
+                        if args.profile and nbatch == 100:
+                            print("Profilling")
+                            with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                ploc, plabel = model(img)
+                            print(prof.key_averages().table(sort_by="self_cpu_time_total"))
+                            prof.export_chrome_trace("torch_throughput.json")
+                        else:
+                            ploc, plabel = model(img)
                         if nbatch >= args.warmup_iterations:
                             inference_time.update(time.time() - start_time)
                             end_time = time.time()
@@ -420,9 +489,9 @@ def eval_ssd_r34_mlperf_coco(args):
     if use_cuda:
         ssd_r34.cuda(args.device)
     elif args.ipex:
-         ssd_r34 = ssd_r34.to(ipex.DEVICE)
-    if args.jit:
-        ssd_r34 = torch.jit.script(ssd_r34)
+        ssd_r34 = ssd_r34.to(ipex.DEVICE)
+    #if args.jit:
+        #ssd_r34 = torch.jit.script(ssd_r34)
     coco_eval(ssd_r34, val_dataloader, cocoGt, encoder, inv_map, args)
 
 def main():

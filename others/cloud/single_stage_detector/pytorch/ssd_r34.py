@@ -141,4 +141,7 @@ class SSD_R34(nn.Module):
         # Feature maps sizes depend on the image size. For 300x300 with strides=[1,1,2,2,2,1] it is 38x38x4, 19x19x6, 10x10x6, 5x5x6, 3x3x4, 1x1x4
         locs, confs,features_shapes = self.bbox_view(src,  extract_shapes=extract_shapes)
         # For SSD 300 with strides=[1,1,2,2,2,1] , shall return nbatch x 8732 x {nlabels, nlocs} results
-        return locs, confs,features_shapes
+        if extract_shapes:
+            return locs, confs,features_shapes
+        else:
+            return locs, confs

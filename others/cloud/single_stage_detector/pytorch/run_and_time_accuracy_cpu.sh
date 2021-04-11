@@ -28,6 +28,9 @@ if [ "$1" == "int8" ]; then
     ARGS="$ARGS --int8"
     CONFIG_FILE="$CONFIG_FILE --configure-dir $3"
     echo "### running int8 datatype"
+elif [ "$1" == "bf16" ]; then
+    ARGS="$ARGS --autocast"
+    echo "### running bf16 datatype"
 else
     echo "### running fp32 datatype"
 fi
@@ -48,4 +51,4 @@ if [ -n "$5" ]; then
     ARGS="$ARGS --iter $5"
 fi
 
-python infer.py --seed 1 --threshold 0.2 -b $BATCH_SIZE -j 0 --data $DATA_DIR --device 0 --checkpoint $MODEL_DIR --no-cuda --ipex $ARGS $CONFIG_FILE
+python infer.py --seed 1 --threshold 0.2 -b $BATCH_SIZE -j 0 --data $DATA_DIR --device 0 --checkpoint $MODEL_DIR --no-cuda $ARGS $CONFIG_FILE

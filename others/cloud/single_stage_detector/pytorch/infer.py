@@ -277,8 +277,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                     model = torch.jit.freeze(model)
                     print("start inference")
                     for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
-                        print("nbatch: {}".format(nbatch))
-
+                        #print("nbatch: {}".format(nbatch))
                         with torch.no_grad():
                             if use_cuda:
                                 img = img.to('cuda')
@@ -328,7 +327,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                     print('autocast imperative path')
                     with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)):
                         for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
-                            print("nbatch: {}".format(nbatch))
+                            #print("nbatch: {}".format(nbatch))
                             with torch.no_grad():
                                 if use_cuda:
                                     img = img.to('cuda')

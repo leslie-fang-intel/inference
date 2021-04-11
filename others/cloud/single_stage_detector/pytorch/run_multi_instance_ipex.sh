@@ -26,6 +26,9 @@ if [ "$1" == "int8" ]; then
     ARGS="$ARGS --int8"
     CONFIG_FILE="$CONFIG_FILE --configure-dir $3"
     echo "### running int8 datatype"
+elif [ "$1" == "bf16" ]; then
+    ARGS="$ARGS --autocast"
+    echo "### running bf16 datatype"
 else
     echo "### running fp32 datatype"
 fi
@@ -46,7 +49,7 @@ CORES_PER_INSTANCE=$CORES
 
 KMP_SETTING="KMP_AFFINITY=granularity=fine,compact,1,0"
 
-BATCH_SIZE=32
+BATCH_SIZE=1
 
 export OMP_NUM_THREADS=$CORES_PER_INSTANCE
 export $KMP_SETTING
@@ -66,7 +69,7 @@ for i in $(seq 1 $LAST_INSTANCE); do
 
     echo "### running on instance $i, numa node $numa_node_i, core list {$start_core_i, $end_core_i}..."
     numactl --physcpubind=$start_core_i-$end_core_i --membind=$numa_node_i python -u infer.py $ARGS \
-        --data $DATA_DIR --device 0 --checkpoint $MODEL_DIR -w 10 -j 0 --ipex --no-cuda --iteration 100 \
+        --data $DATA_DIR --device 0 --checkpoint $MODEL_DIR -w 10 -j 0 --no-cuda --iteration 100 \
         -b $BATCH_SIZE $CONFIG_FILE 2>&1 | tee $LOG_i &
 done
 
@@ -77,7 +80,7 @@ LOG_0=inference_cpu_bs${BATCH_SIZE}_ins0.txt
 
 echo "### running on instance 0, numa node $numa_node_0, core list {$start_core_0, $end_core_0}...\n\n"
 numactl --physcpubind=$start_core_0-$end_core_0 --membind=$numa_node_0 python -u infer.py $ARGS \
-    --data $DATA_DIR --device 0 --checkpoint $MODEL_DIR -w 10 -j 0 --ipex --no-cuda --iteration 100 \
+    --data $DATA_DIR --device 0 --checkpoint $MODEL_DIR -w 10 -j 0 --no-cuda --iteration 100 \
     -b $BATCH_SIZE $CONFIG_FILE 2>&1 | tee $LOG_0
 
 sleep 10

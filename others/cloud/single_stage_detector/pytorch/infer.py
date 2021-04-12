@@ -269,13 +269,18 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
             print('runing real inputs path')
             if args.autocast:
                 print('bf16 autocast enabled')
+                print('bf16 conv_bn_fusion enabled')
+                model.model = ipex.fx.conv_bn_fuse(model.model)
+                print('enable nhwc')
+                model = model.to(memory_format=torch.channels_last)
                 if args.jit:
-                    print('autocast jit path')
+                    print('enable jit')
                     #model = ipex.optimize(model, dtype=torch.bfloat16, level="O1")
                     with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)), torch.no_grad(): 
-                        model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200)) 
+                        #model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200), check_trace=False)
+                        #model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200).to(memory_format=torch.channels_last))
+                        model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200))
                     model = torch.jit.freeze(model)
-                    print("start inference")
                     for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
                         #print("nbatch: {}".format(nbatch))
                         with torch.no_grad():
@@ -283,6 +288,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                 img = img.to('cuda')
                             elif args.ipex:
                                 img = img.to(ipex.DEVICE)
+                            #img = img.to(memory_format=torch.channels_last)
 
                             if nbatch >= args.warmup_iterations:
                                 start_time=time.time()
@@ -333,16 +339,29 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                     img = img.to('cuda')
                                 elif args.ipex:
                                     img = img.to(ipex.DEVICE)
+                                
+                                img = img.contiguous(memory_format=torch.channels_last)
 
                                 if nbatch >= args.warmup_iterations:
                                     start_time=time.time()
-                                ploc, plabel = model(img)
+                                #ploc, plabel = model(img)
+
+                                if args.profile and nbatch == 0:
+                                    print("Profilling")
+                                    with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                        ploc, plabel = model(img)
+                                    print(prof.key_averages().table(sort_by="self_cpu_time_total"))
+                                    prof.export_chrome_trace("torch_throughput.json")
+                                else:
+                                    ploc, plabel = model(img)
+
                                 if nbatch >= args.warmup_iterations:
                                     inference_time.update(time.time() - start_time)
                                     end_time = time.time()
                                 
                                 with ipex.amp.autocast(enabled=False):
                                     try:
+                                        #results = encoder.decode_batch(ploc.to_dense().to(torch.float32), plabel.to_dense().to(torch.float32), 0.50, 200,device=device)
                                         results = encoder.decode_batch(ploc.to(torch.float32), plabel.to(torch.float32), 0.50, 200,device=device)
                                     except:
                                         print("No object detected in idx: {}".format(idx))
@@ -369,16 +388,22 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                         break
             else:
                 print('autocast disabled, fp32 is used')
+                print('fp32 conv_bn_fusion enabled')
+                model.model = ipex.fx.conv_bn_fuse(model.model)
+                print('enable nhwc')
+                model = model.to(memory_format=torch.channels_last)
                 if args.jit:
                     print("enable jit")
                     with torch.no_grad():
                         model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200))
+                        #model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200))
                 for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
                     with torch.no_grad():
                         if use_cuda:
                             img = img.to('cuda')
                         elif args.ipex:
                             img = img.to(ipex.DEVICE)
+                        img = img.contiguous(memory_format=torch.channels_last)
 
                         if nbatch >= args.warmup_iterations:
                             start_time=time.time()

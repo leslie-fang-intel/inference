@@ -279,10 +279,10 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                     with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)), torch.no_grad(): 
                         #model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200), check_trace=False)
                         #model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200).to(memory_format=torch.channels_last))
-                        model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200))
+                        model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200).to(memory_format=torch.channels_last))
                     model = torch.jit.freeze(model)
                     for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
-                        #print("nbatch: {}".format(nbatch))
+                        print("nbatch: {}".format(nbatch))
                         with torch.no_grad():
                             if use_cuda:
                                 img = img.to('cuda')
@@ -396,7 +396,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                 if args.jit:
                     print("enable jit")
                     with torch.no_grad():
-                        model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200))
+                        model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200).to(memory_format=torch.channels_last))
                         #model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200))
                 for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
                     with torch.no_grad():

@@ -292,6 +292,8 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
 
                             if nbatch >= args.warmup_iterations:
                                 start_time=time.time()
+                            
+                            img = img.to(memory_format=torch.channels_last)
                             if args.profile and nbatch == 100:
                                 print("Profilling")
                                 with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
@@ -339,12 +341,11 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                     img = img.to('cuda')
                                 elif args.ipex:
                                     img = img.to(ipex.DEVICE)
-                                
-                                img = img.contiguous(memory_format=torch.channels_last)
 
                                 if nbatch >= args.warmup_iterations:
                                     start_time=time.time()
                                 #ploc, plabel = model(img)
+                                img = img.contiguous(memory_format=torch.channels_last)
 
                                 if args.profile and nbatch == 0:
                                     print("Profilling")
@@ -403,10 +404,11 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                             img = img.to('cuda')
                         elif args.ipex:
                             img = img.to(ipex.DEVICE)
-                        img = img.contiguous(memory_format=torch.channels_last)
 
                         if nbatch >= args.warmup_iterations:
                             start_time=time.time()
+                        
+                        img = img.contiguous(memory_format=torch.channels_last)
                         if args.profile and nbatch == 100:
                             print("Profilling")
                             with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:

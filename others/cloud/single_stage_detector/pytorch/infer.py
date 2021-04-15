@@ -279,7 +279,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                     with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)), torch.no_grad(): 
                         #model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200), check_trace=False)
                         #model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200).to(memory_format=torch.channels_last))
-                        model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200).to(memory_format=torch.channels_last))
+                        model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200).to(memory_format=torch.channels_last)).eval()
                     model = torch.jit.freeze(model)
                     for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
                         print("nbatch: {}".format(nbatch))
@@ -347,7 +347,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                 #ploc, plabel = model(img)
                                 img = img.contiguous(memory_format=torch.channels_last)
 
-                                if args.profile and nbatch == 0:
+                                if args.profile and nbatch == 100:
                                     print("Profilling")
                                     with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
                                         ploc, plabel = model(img)

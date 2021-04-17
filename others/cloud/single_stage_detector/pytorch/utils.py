@@ -174,7 +174,7 @@ class Encoder(object):
             bboxes_out, labels_out, scores_out = batch_score_nms(bbox, prob, criteria)
             _, max_ids = scores_out.sort(dim=0)
             max_ids = max_ids[-max_output:]
-            output.append(bboxes_out[max_ids, :], labels_out[max_ids], scores_out[max_ids])
+            output.append([bboxes_out[max_ids, :], labels_out[max_ids], scores_out[max_ids]])
 
         return output
 

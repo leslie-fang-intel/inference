@@ -309,11 +309,11 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                             try:
                                 if args.profile and nbatch == 49:
                                     with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
-                                       results = encoder.decode_batch(ploc.to(torch.float32), plabel.to(torch.float32), 0.50, 200,device=device)
+                                       results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
                                     print(prof.key_averages().table(sort_by="self_cpu_time_total"))
                                     prof.export_chrome_trace("torch_decode_throughput.json")
                                 else:
-                                    results = encoder.decode_batch(ploc.to(torch.float32), plabel.to(torch.float32), 0.50, 200,device=device)
+                                    results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
                             except:
                                 print("No object detected in idx: {}".format(idx))
                                 continue
@@ -369,7 +369,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                 with ipex.amp.autocast(enabled=False):
                                     try:
                                         #results = encoder.decode_batch(ploc.to_dense().to(torch.float32), plabel.to_dense().to(torch.float32), 0.50, 200,device=device)
-                                        results = encoder.decode_batch(ploc.to(torch.float32), plabel.to(torch.float32), 0.50, 200,device=device)
+                                        results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
                                     except:
                                         print("No object detected in idx: {}".format(idx))
                                         continue

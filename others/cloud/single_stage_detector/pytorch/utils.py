@@ -134,8 +134,8 @@ class Encoder(object):
             self.dboxes = self.dboxes.cuda(device)
             self.dboxes_xywh = self.dboxes_xywh.cuda(device)
 
-        bboxes_in = bboxes_in.permute(0, 2, 1)
-        scores_in = scores_in.permute(0, 2, 1)
+        bboxes_in = bboxes_in.permute(0, 2, 1).contiguous().to(torch.float32)
+        scores_in = scores_in.permute(0, 2, 1).contiguous().to(torch.float32)
 
         bboxes_in[:, :, :2] = self.scale_xy*bboxes_in[:, :, :2]
         bboxes_in[:, :, 2:] = self.scale_wh*bboxes_in[:, :, 2:]
@@ -162,8 +162,8 @@ class Encoder(object):
             # bboxes_in: (batchsize, 4, num_bbox) scores_in: (batchsize, label_num, num_bbox)
             # For example: bboxes_in: (1, 4, 15130) scores_in: (1, 81, 15130)
             #start_time1 = time.time()
-            bboxes_in = bboxes_in.permute(0, 2, 1)
-            scores_in = scores_in.permute(0, 2, 1)
+            bboxes_in = bboxes_in.permute(0, 2, 1).contiguous().to(torch.float32)
+            scores_in = scores_in.permute(0, 2, 1).contiguous().to(torch.float32)
             #print("permute time is: {}".format(time.time() - start_time1))
 
             # Do scale and transform from xywh to ltrb

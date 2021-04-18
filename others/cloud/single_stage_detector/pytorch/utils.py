@@ -156,25 +156,21 @@ class Encoder(object):
 
         return bboxes_in, F.softmax(scores_in, dim=-1)
 
-    def scale_back_batch_v2(self, bboxes_in, scores_in, device):
-        """
-            Do scale and transform from xywh to ltrb
-            suppose input Nx4xnum_bbox Nxlabel_numxnum_bbox
-        """
-        if bboxes_in.device == torch.device("cpu"):
-            self.dboxes = self.dboxes.cpu()
-            self.dboxes_xywh = self.dboxes_xywh.cpu()
-
-        bboxes_in = bboxes_in.permute(0, 2, 1)
-        scores_in = scores_in.permute(0, 2, 1)
-
-        bboxes_in, score_in_softmax = parallel_scale_back_batch(bboxes_in, scores_in, self.dboxes_xywh, self.scale_xy, self.scale_wh)
-        return bboxes_in, score_in_softmax
-
     def decode_batch(self, bboxes_in, scores_in,  criteria = 0.45, max_output=200, device=0):
         v2 = True
         if v2:
-            bboxes, probs = self.scale_back_batch_v2(bboxes_in, scores_in,device)
+            # bboxes_in: (batchsize, 4, num_bbox) scores_in: (batchsize, label_num, num_bbox)
+            # bboxes_in: (1, 4, 15130) scores_in: (1, 81, 15130)
+            bboxes_in = bboxes_in.permute(0, 2, 1)
+            scores_in = scores_in.permute(0, 2, 1)
+
+            # Do scale and transform from xywh to ltrb
+            # bboxes_in: (batchsize, num_bbox, 4) scores_in: (batchsize, num_bbox, label_num)
+            # bboxes_in: (1, 15130, 4) scores_in: (1, 15130, 81)
+            bboxes, probs = parallel_scale_back_batch(bboxes_in, scores_in, self.dboxes_xywh, self.scale_xy, self.scale_wh)
+
+            # bboxes: (batchsize, num_bbox, 4) scores_in: (batchsize, num_bbox, label_num)
+            # probs: (1, 15130, 4) scores_in: (1, 15130, 81)
             output_v2 = batch_score_nms_v2(bboxes, probs, criteria, max_output)
             return output_v2
         else:

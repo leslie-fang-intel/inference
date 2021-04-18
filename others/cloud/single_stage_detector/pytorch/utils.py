@@ -163,8 +163,6 @@ class Encoder(object):
 
     def decode_batch(self, bboxes_in, scores_in,  criteria = 0.45, max_output=200,device=0):
         bboxes, probs = self.scale_back_batch(bboxes_in, scores_in,device)
-        #bboxes, probs = parallel_scale_back_batch(bboxes_in, scores_in, self.dboxes_xywh, self.scale_xy, self.scale_xy)
-        
         """
         output = []
         for bbox, prob in zip(bboxes.split(1, 0), probs.split(1, 0)):

@@ -427,7 +427,14 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                             inference_time.update(time.time() - start_time)
                             end_time = time.time()
                         try:
-                            results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
+                            if args.profile and nbatch == 49:
+                                with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                    results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
+                                print(prof.key_averages().table(sort_by="self_cpu_time_total"))
+                                prof.export_chrome_trace("torch_fp32_decode_throughput.json")
+                            else:
+                                results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
+                            #results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
                         except:
                             print("No object detected in idx: {}".format(idx))
                             continue

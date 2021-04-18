@@ -20,7 +20,7 @@ from math import sqrt, ceil
 if os.environ.get('USE_IPEX') == "1":
     import intel_pytorch_extension as ipex
 
-from intel_pytorch_extension import batch_score_nms, parallel_scale_back_batch
+from intel_pytorch_extension import batch_score_nms, parallel_scale_back_batch, batch_score_nms_v2
 
 # This function is from https://github.com/kuangliu/pytorch-ssd.
 def calc_iou_tensor(box1, box2):
@@ -164,19 +164,27 @@ class Encoder(object):
     def decode_batch(self, bboxes_in, scores_in,  criteria = 0.45, max_output=200,device=0):
         bboxes, probs = self.scale_back_batch(bboxes_in, scores_in,device)
         #bboxes, probs = parallel_scale_back_batch(bboxes_in, scores_in, self.dboxes_xywh, self.scale_xy, self.scale_xy)
+        
+        """
         output = []
         for bbox, prob in zip(bboxes.split(1, 0), probs.split(1, 0)):
             bbox = bbox.squeeze(0)
             prob = prob.squeeze(0)
+            #print(bbox.sizes())
 
-            #output.append(self.decode_single_ipex(bbox, prob, criteria, max_output))
+            ##output.append(self.decode_single_ipex(bbox, prob, criteria, max_output))
 
             bboxes_out, labels_out, scores_out = batch_score_nms(bbox, prob, criteria)
             _, max_ids = scores_out.sort(dim=0)
             max_ids = max_ids[-max_output:]
             output.append([bboxes_out[max_ids, :], labels_out[max_ids], scores_out[max_ids]])
-
+            #print(bboxes_out[max_ids, :].size())
+            #print(labels_out[max_ids].size())
+            #print(scores_out[max_ids].size())
         return output
+        """
+        output_v2 = batch_score_nms_v2(bboxes, probs, criteria, max_output)
+        return output_v2
 
     # perform non-maximum suppression for IPEX tensor
     def decode_single_ipex(self, bboxes_in, scores_in, criteria, max_output, max_num=200):

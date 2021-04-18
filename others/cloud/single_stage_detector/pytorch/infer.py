@@ -294,7 +294,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                 start_time=time.time()
                             
                             img = img.to(memory_format=torch.channels_last)
-                            if args.profile and nbatch == 100:
+                            if args.profile and nbatch == 99:
                                 print("Profilling")
                                 with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
                                     ploc, plabel = model(img)
@@ -307,7 +307,13 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                 end_time = time.time()
 
                             try:
-                                results = encoder.decode_batch(ploc.to(torch.float32), plabel.to(torch.float32), 0.50, 200,device=device)
+                                if args.profile and nbatch == 49:
+                                    with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                       results = encoder.decode_batch(ploc.to(torch.float32), plabel.to(torch.float32), 0.50, 200,device=device)
+                                    print(prof.key_averages().table(sort_by="self_cpu_time_total"))
+                                    prof.export_chrome_trace("torch_decode_throughput.json")
+                                else:
+                                    results = encoder.decode_batch(ploc.to(torch.float32), plabel.to(torch.float32), 0.50, 200,device=device)
                             except:
                                 print("No object detected in idx: {}".format(idx))
                                 continue

@@ -161,17 +161,24 @@ class Encoder(object):
         if v2:
             # bboxes_in: (batchsize, 4, num_bbox) scores_in: (batchsize, label_num, num_bbox)
             # For example: bboxes_in: (1, 4, 15130) scores_in: (1, 81, 15130)
+            #start_time1 = time.time()
             bboxes_in = bboxes_in.permute(0, 2, 1)
             scores_in = scores_in.permute(0, 2, 1)
+            #print("permute time is: {}".format(time.time() - start_time1))
 
             # Do scale and transform from xywh to ltrb
             # bboxes_in: (batchsize, num_bbox, 4) scores_in: (batchsize, num_bbox, label_num)
             # For example: bboxes_in: (1, 15130, 4) scores_in: (1, 15130, 81)
+
+            #start_time2 = time.time()
             bboxes, probs = parallel_scale_back_batch(bboxes_in, scores_in, self.dboxes_xywh, self.scale_xy, self.scale_wh)
+            #print("parallel_scale_back_batch time is: {}".format(time.time() - start_time2))
 
             # bboxes: (batchsize, num_bbox, 4) scores_in: (batchsize, num_bbox, label_num)
             # For example: probs: (1, 15130, 4) scores_in: (1, 15130, 81)
+            #start_time3 = time.time()
             output_v2 = batch_score_nms_v2(bboxes, probs, criteria, max_output)
+            #print("batch_score_nms_v2 time is: {}".format(time.time() - start_time3))
             return output_v2
         else:
             bboxes, probs = self.scale_back_batch(bboxes_in, scores_in,device)

@@ -127,12 +127,43 @@ class Encoder(object):
         if bboxes_in.device == torch.device("cpu"):
             self.dboxes = self.dboxes.cpu()
             self.dboxes_xywh = self.dboxes_xywh.cpu()
-        #elif bboxes_in.device == torch.device(ipex.DEVICE):
-        #    self.dboxes = self.dboxes.to(ipex.DEVICE)
-        #    self.dboxes_xywh = self.dboxes_xywh.to(ipex.DEVICE)
-        #else:
-        #    self.dboxes = self.dboxes.cuda(device)
-        #    self.dboxes_xywh = self.dboxes_xywh.cuda(device)
+        elif bboxes_in.device == torch.device(ipex.DEVICE):
+            self.dboxes = self.dboxes.to(ipex.DEVICE)
+            self.dboxes_xywh = self.dboxes_xywh.to(ipex.DEVICE)
+        else:
+            self.dboxes = self.dboxes.cuda(device)
+            self.dboxes_xywh = self.dboxes_xywh.cuda(device)
+
+        bboxes_in = bboxes_in.permute(0, 2, 1)
+        scores_in = scores_in.permute(0, 2, 1)
+
+        bboxes_in[:, :, :2] = self.scale_xy*bboxes_in[:, :, :2]
+        bboxes_in[:, :, 2:] = self.scale_wh*bboxes_in[:, :, 2:]
+
+        bboxes_in[:, :, :2] = bboxes_in[:, :, :2]*self.dboxes_xywh[:, :, 2:] + self.dboxes_xywh[:, :, :2]
+        bboxes_in[:, :, 2:] = bboxes_in[:, :, 2:].exp()*self.dboxes_xywh[:, :, 2:]
+
+        # Transform format to ltrb
+        l, t, r, b = bboxes_in[:, :, 0] - 0.5*bboxes_in[:, :, 2],\
+                     bboxes_in[:, :, 1] - 0.5*bboxes_in[:, :, 3],\
+                     bboxes_in[:, :, 0] + 0.5*bboxes_in[:, :, 2],\
+                     bboxes_in[:, :, 1] + 0.5*bboxes_in[:, :, 3]
+
+        bboxes_in[:, :, 0] = l
+        bboxes_in[:, :, 1] = t
+        bboxes_in[:, :, 2] = r
+        bboxes_in[:, :, 3] = b
+
+        return bboxes_in, F.softmax(scores_in, dim=-1)
+
+    def scale_back_batch_v2(self, bboxes_in, scores_in, device):
+        """
+            Do scale and transform from xywh to ltrb
+            suppose input Nx4xnum_bbox Nxlabel_numxnum_bbox
+        """
+        if bboxes_in.device == torch.device("cpu"):
+            self.dboxes = self.dboxes.cpu()
+            self.dboxes_xywh = self.dboxes_xywh.cpu()
 
         bboxes_in = bboxes_in.permute(0, 2, 1)
         scores_in = scores_in.permute(0, 2, 1)
@@ -140,50 +171,21 @@ class Encoder(object):
         bboxes_in, score_in_softmax = parallel_scale_back_batch(bboxes_in, scores_in, self.dboxes_xywh, self.scale_xy, self.scale_wh)
         return bboxes_in, score_in_softmax
 
-        #print(bboxes_in.device, scores_in.device, self.dboxes_xywh.device)
-
-        #bboxes_in[:, :, :2] = self.scale_xy*bboxes_in[:, :, :2]
-        #bboxes_in[:, :, 2:] = self.scale_wh*bboxes_in[:, :, 2:]
-
-        #bboxes_in[:, :, :2] = bboxes_in[:, :, :2]*self.dboxes_xywh[:, :, 2:] + self.dboxes_xywh[:, :, :2]
-        #bboxes_in[:, :, 2:] = bboxes_in[:, :, 2:].exp()*self.dboxes_xywh[:, :, 2:]
-
-        # Transform format to ltrb
-        #l, t, r, b = bboxes_in[:, :, 0] - 0.5*bboxes_in[:, :, 2],\
-        #             bboxes_in[:, :, 1] - 0.5*bboxes_in[:, :, 3],\
-        #             bboxes_in[:, :, 0] + 0.5*bboxes_in[:, :, 2],\
-        #             bboxes_in[:, :, 1] + 0.5*bboxes_in[:, :, 3]
-
-        #bboxes_in[:, :, 0] = l
-        #bboxes_in[:, :, 1] = t
-        #bboxes_in[:, :, 2] = r
-        #bboxes_in[:, :, 3] = b
-
-        #return bboxes_in, F.softmax(scores_in, dim=-1)
-
-    def decode_batch(self, bboxes_in, scores_in,  criteria = 0.45, max_output=200,device=0):
-        bboxes, probs = self.scale_back_batch(bboxes_in, scores_in,device)
-        """
-        output = []
-        for bbox, prob in zip(bboxes.split(1, 0), probs.split(1, 0)):
-            bbox = bbox.squeeze(0)
-            prob = prob.squeeze(0)
-            #print(bbox.sizes())
-
-            ##output.append(self.decode_single_ipex(bbox, prob, criteria, max_output))
-
-            bboxes_out, labels_out, scores_out = batch_score_nms(bbox, prob, criteria)
-            _, max_ids = scores_out.sort(dim=0)
-            max_ids = max_ids[-max_output:]
-            output.append([bboxes_out[max_ids, :], labels_out[max_ids], scores_out[max_ids]])
-            #print(bboxes_out[max_ids, :].size())
-            #print(labels_out[max_ids].size())
-            #print(scores_out[max_ids].size())
-        return output
-        """
-        output_v2 = batch_score_nms_v2(bboxes, probs, criteria, max_output)
-        return output_v2
-
+    def decode_batch(self, bboxes_in, scores_in,  criteria = 0.45, max_output=200, device=0):
+        v2 = True
+        if v2:
+            bboxes, probs = self.scale_back_batch_v2(bboxes_in, scores_in,device)
+            output_v2 = batch_score_nms_v2(bboxes, probs, criteria, max_output)
+            return output_v2
+        else:
+            bboxes, probs = self.scale_back_batch(bboxes_in, scores_in,device)
+            output = []
+            for bbox, prob in zip(bboxes.split(1, 0), probs.split(1, 0)):
+                bbox = bbox.squeeze(0)
+                prob = prob.squeeze(0)
+                output.append(self.decode_single_ipex(bbox, prob, criteria, max_output))
+            return output
+    
     # perform non-maximum suppression for IPEX tensor
     def decode_single_ipex(self, bboxes_in, scores_in, criteria, max_output, max_num=200):
         # Reference to https://github.com/amdegroot/ssd.pytorch

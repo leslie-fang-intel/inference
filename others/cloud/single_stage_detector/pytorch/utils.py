@@ -17,10 +17,13 @@ import bz2
 import pickle
 from math import sqrt, ceil
 
+use_optimized_nms = False
 if os.environ.get('USE_IPEX') == "1":
     import intel_pytorch_extension as ipex
-
-from intel_pytorch_extension import batch_score_nms, parallel_scale_back_batch, batch_score_nms_v2
+    from intel_pytorch_extension import batch_score_nms
+    if os.environ.get('USE_OPTIMIZED_NMS') == "1":
+        from intel_pytorch_extension import parallel_scale_back_batch, batch_score_nms_v2
+        use_optimized_nms = True
 
 # This function is from https://github.com/kuangliu/pytorch-ssd.
 def calc_iou_tensor(box1, box2):
@@ -157,10 +160,9 @@ class Encoder(object):
         return bboxes_in, F.softmax(scores_in, dim=-1)
 
     def decode_batch(self, bboxes_in, scores_in,  criteria = 0.45, max_output=200, device=0):
-        v2 = True
         bboxes_in = bboxes_in.to(torch.float32)
         scores_in = scores_in.to(torch.float32)
-        if v2:
+        if use_optimized_nms:
             # bboxes_in: (batchsize, 4, num_bbox) scores_in: (batchsize, label_num, num_bbox)
             # For example: bboxes_in: (1, 4, 15130) scores_in: (1, 81, 15130)
             #start_time1 = time.time()

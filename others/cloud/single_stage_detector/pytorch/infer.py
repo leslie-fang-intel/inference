@@ -234,33 +234,26 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                 img = img.to('cuda')
             elif args.ipex:
                 img = img.to(ipex.DEVICE)
+            enable_autocast = False
             if args.autocast:
                 print('autocast enabled')
-                with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)):
-                    for nbatch in range(args.iteration):
-                        print("nbatch: {}".format(nbatch))
-                        with torch.no_grad():
-                            if nbatch >= args.warmup_iterations:
-                                start_time=time.time()
-                            if nbatch == 5:
-                                print("Profilling")
-                                with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
-                                    ploc, plabel,_ = model(img)
-                                print(prof.key_averages().table(sort_by="self_cpu_time_total"))
-                                prof.export_chrome_trace("torch_throughput.json")
-                            else:
-                                ploc, plabel,_ = model(img)
-                            if nbatch >= args.warmup_iterations:
-                                inference_time.update(time.time() - start_time)
-                            if nbatch % args.print_freq == 0:
-                                progress.display(nbatch)
+                enable_autocast = True
             else:
                 print('autocast disabled')
+                enable_autocast = False
+            with ipex.amp.autocast(enabled=enable_autocast, configure=ipex.conf.AmpConf(torch.bfloat16)):
                 for nbatch in range(args.iteration):
                     with torch.no_grad():
                         if nbatch >= args.warmup_iterations:
                             start_time=time.time()
-                        ploc, plabel,_ = model(img)
+                        if nbatch == 5:
+                            print("Profilling")
+                            with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                ploc, plabel,_ = model(img)
+                            print(prof.key_averages().table(sort_by="self_cpu_time_total"))
+                            prof.export_chrome_trace("torch_throughput.json")
+                        else:
+                            ploc, plabel,_ = model(img)
                         if nbatch >= args.warmup_iterations:
                             inference_time.update(time.time() - start_time)
                         if nbatch % args.print_freq == 0:
@@ -277,8 +270,6 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                     print('enable jit')
                     #model = ipex.optimize(model, dtype=torch.bfloat16, level="O1")
                     with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)), torch.no_grad(): 
-                        #model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200), check_trace=False)
-                        #model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200).to(memory_format=torch.channels_last))
                         model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200).to(memory_format=torch.channels_last)).eval()
                     model = torch.jit.freeze(model)
                     for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
@@ -288,7 +279,6 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                 img = img.to('cuda')
                             elif args.ipex:
                                 img = img.to(ipex.DEVICE)
-                            #img = img.to(memory_format=torch.channels_last)
 
                             if nbatch >= args.warmup_iterations:
                                 start_time=time.time()
@@ -369,7 +359,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                 with ipex.amp.autocast(enabled=False):
                                     try:
                                         #results = encoder.decode_batch(ploc.to_dense().to(torch.float32), plabel.to_dense().to(torch.float32), 0.50, 200,device=device)
-                                        results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
+                                        results = encoder.decode_batch(ploc, plabel, 0.50, 200, device=device)
                                     except:
                                         print("No object detected in idx: {}".format(idx))
                                         continue

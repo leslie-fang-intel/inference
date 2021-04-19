@@ -50,7 +50,7 @@ def parse_args():
                         help='enable ipex jit path')
     parser.add_argument('--calibration', action='store_true', default=False,
                         help='doing int8 calibration step')
-    parser.add_argument('--configure-dir', default='configure.json', type=str, metavar='PATH',
+    parser.add_argument('--configure', default='configure.json', type=str, metavar='PATH',
                         help='path to int8 configures, default file name is configure.json')
     parser.add_argument("--dummy", action='store_true',
                         help="using  dummu data to test the performance of inference")
@@ -136,44 +136,24 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
         prefix='Test: ')
 
     start = time.time()
-    if args.ipex and args.int8:
+    if args.int8:
+        model = model.eval()
+        # disable PyTorch JIT profiling
+        torch._C._jit_set_profiling_mode(False)
+        torch._C._jit_set_profiling_executor(False)
+        # disable IPEX JIT optimization
+        ipex.core.disable_jit_opt()
+        print('int8 conv_bn_fusion enabled')
+        model.model = ipex.fx.conv_bn_fuse(model.model)
+
         if args.calibration:
-            print("runing int8 calibration step\n")
+            print("runing int8 LLGA calibration step\n")
             conf = ipex.AmpConf(torch.int8)
             for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
-                with torch.no_grad():
-                    with ipex.AutoMixPrecision(conf, running_mode="calibration"):
-                        inp = img.to(ipex.DEVICE)
-                        start_time = time.time()
-                        ploc, plabel,_ = model(inp)
-                        inference_time.update(time.time() - start_time)
-                        end_time = time.time()
-                        try:
-                            results = encoder.decode_batch(ploc.to('cpu'), plabel.to('cpu'), 0.50, 200,device=device)
-                        except:
-                            #raise
-                            print("No object detected in idx: {}".format(idx))
-                            continue
-                        decoding_time.update(time.time() - end_time)
-                        (htot, wtot) = [d.cpu().numpy() for d in img_size]
-                        img_id = img_id.cpu().numpy()
-                        # Iterate over batch elements
-                        for img_id_, wtot_, htot_, result in zip(img_id, wtot, htot, results):
-                            loc, label, prob = [r.cpu().numpy() for r in result]
-                            # Iterate over image detections
-                            for loc_, label_, prob_ in zip(loc, label, prob):
-                                ret.append([img_id_, loc_[0]*wtot_, \
-                                            loc_[1]*htot_,
-                                            (loc_[2] - loc_[0])*wtot_,
-                                            (loc_[3] - loc_[1])*htot_,
-                                            prob_,
-                                            inv_map[label_]])
+                with ipex.amp.calibrate(), torch.no_grad():
+                    ploc, plabel, _ = model(img)
+            conf.save(args.configure)
 
-                        if nbatch % args.print_freq == 0:
-                            progress.display(nbatch)
-                        if nbatch == args.iteration:
-                            conf.save(args.configure_dir)
-                            break
         else:
             conf = ipex.AmpConf(torch.int8, args.configure_dir)
             if args.dummy:
@@ -473,8 +453,6 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
         return (E.stats[0] >= threshold) #Average Precision  (AP) @[ IoU=050:0.95 | area=   all | maxDets=100 ]
     else:
         return False
-
-
 
 def eval_ssd_r34_mlperf_coco(args):
     from coco import COCO

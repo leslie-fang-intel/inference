@@ -150,62 +150,77 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
             print("runing int8 LLGA calibration step\n")
             conf = ipex.AmpConf(torch.int8)
             for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
+                print("nbatch:{}".format(nbatch))
                 with ipex.amp.calibrate(), torch.no_grad():
-                    ploc, plabel, _ = model(img)
+                    ploc, plabel = model(img)
+                if nbatch == args.iteration:
+                    #conf.save(args.configure_dir)
+                    break
             conf.save(args.configure)
+            return
 
         else:
-            conf = ipex.AmpConf(torch.int8, args.configure_dir)
-            if args.dummy:
-                print('runing int8 dummy inputs inference path')
-                img = torch.randn(args.batch_size, 3, 1200, 1200).to(ipex.DEVICE)
-                for nbatch in range(args.iteration):
-                    with torch.no_grad():
-                        with ipex.AutoMixPrecision(conf, running_mode="inference"):
-                            if nbatch >= args.warmup_iterations:
-                                start_time=time.time()
-                            ploc, plabel,_ = model(img)
-                            if nbatch >= args.warmup_iterations:
-                                inference_time.update(time.time() - start_time)
-                            if nbatch % args.print_freq == 0:
-                                progress.display(nbatch)
-            else:
-                print('runing int8 real inputs inference path')
-                for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
-                    with torch.no_grad():
-                        with ipex.AutoMixPrecision(conf, running_mode="inference"):
-                            inp = img.to(ipex.DEVICE)
-                            if nbatch >= args.warmup_iterations:
-                                start_time=time.time()
-                            ploc, plabel,_ = model(inp)
-                            if nbatch >= args.warmup_iterations:
-                                inference_time.update(time.time() - start_time)
-                                end_time = time.time()
-                            try:
-                                results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
-                            except:
-                                print("No object detected in idx: {}".format(idx))
-                                continue
-                            if nbatch >= args.warmup_iterations:
-                                decoding_time.update(time.time() - end_time)
-                            (htot, wtot) = [d.cpu().numpy() for d in img_size]
-                            img_id = img_id.cpu().numpy()
-                            # Iterate over batch elements
-                            for img_id_, wtot_, htot_, result in zip(img_id, wtot, htot, results):
-                                loc, label, prob = [r.cpu().numpy() for r in result]
-                                # Iterate over image detections
-                                for loc_, label_, prob_ in zip(loc, label, prob):
-                                    ret.append([img_id_, loc_[0]*wtot_, \
-                                                loc_[1]*htot_,
-                                                (loc_[2] - loc_[0])*wtot_,
-                                                (loc_[3] - loc_[1])*htot_,
-                                                prob_,
-                                                inv_map[label_]])
+            print("INT8 LLGA start trace")
+            # insert quant/dequant based on configure.json
+            conf = ipex.AmpConf(torch.int8, args.configure)
+            with ipex.amp.autocast(enabled=True, configure=conf):
+                model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200), check_trace=False)
+            print("done ipex default recipe.......................")
+            # freeze the module
+            model = torch.jit._recursive.wrap_cpp_module(torch._C._freeze_module(model._c, preserveParameters=True))
+            #default_graph = model.graph
+            #print("ipex default graph")
+            #print(model.graph)
+            # apply llga optimization pass
+            ipex.core._jit_llga_fuser(model.graph)
+            #print("llga graph")
+            #print(model.graph)
+            #print("done llga optimization.......................")
 
-                            if nbatch % args.print_freq == 0:
-                                progress.display(nbatch)
-                            if nbatch == args.iteration:
-                                break
+            print('runing int8 real inputs inference path')
+            for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
+                    with torch.no_grad():
+                        #inp = img.to(ipex.DEVICE)
+                        if nbatch >= args.warmup_iterations:
+                            start_time=time.time()
+                        
+                        if args.profile and nbatch == 99:
+                            print("Profilling")
+                            with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                ploc, plabel = model(img)
+                            print(prof.key_averages().table(sort_by="self_cpu_time_total"))
+                            prof.export_chrome_trace("torch_int8_throughput.json")
+                        else:
+                            ploc, plabel = model(img)
+
+                        if nbatch >= args.warmup_iterations:
+                            inference_time.update(time.time() - start_time)
+                            end_time = time.time()
+                        try:
+                            results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
+                        except:
+                            print("No object detected in idx: {}".format(idx))
+                            continue
+                        if nbatch >= args.warmup_iterations:
+                            decoding_time.update(time.time() - end_time)
+                        (htot, wtot) = [d.cpu().numpy() for d in img_size]
+                        img_id = img_id.cpu().numpy()
+                        # Iterate over batch elements
+                        for img_id_, wtot_, htot_, result in zip(img_id, wtot, htot, results):
+                            loc, label, prob = [r.cpu().numpy() for r in result]
+                            # Iterate over image detections
+                            for loc_, label_, prob_ in zip(loc, label, prob):
+                                ret.append([img_id_, loc_[0]*wtot_, \
+                                            loc_[1]*htot_,
+                                            (loc_[2] - loc_[0])*wtot_,
+                                            (loc_[3] - loc_[1])*htot_,
+                                            prob_,
+                                            inv_map[label_]])
+
+                        if nbatch % args.print_freq == 0:
+                            progress.display(nbatch)
+                        if nbatch == args.iteration:
+                            break
     else:
         if args.dummy:
             print('runing fp32 dummy inputs inference path')

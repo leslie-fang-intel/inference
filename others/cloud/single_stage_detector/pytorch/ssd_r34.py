@@ -124,7 +124,7 @@ class SSD_R34(nn.Module):
             if extract_shapes:
                 ls=l(s)
                 features_shapes.append([ls.shape[2],ls.shape[3]])
-        locs, confs = torch.cat(locs, 2).permute(0, 2, 1).contiguous(), torch.cat(confs, 2).permute(0, 2, 1).contiguous()
+        locs, confs = torch.cat(locs, 2).contiguous(), torch.cat(confs, 2).contiguous()
         return locs, confs, features_shapes
 
     def forward(self, data, extract_shapes:bool=False):

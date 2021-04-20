@@ -22,7 +22,7 @@ if os.environ.get('USE_IPEX') == "1":
     import intel_pytorch_extension as ipex
     from intel_pytorch_extension import batch_score_nms
     if os.environ.get('USE_OPTIMIZED_NMS') == "1":
-        from intel_pytorch_extension import parallel_scale_back_batch, batch_score_nms_v2
+        from intel_pytorch_extension import parallel_scale_back_batch, batch_score_nms_v2, fused_batch_score_nms
         use_optimized_nms = True
 
 # This function is from https://github.com/kuangliu/pytorch-ssd.
@@ -160,30 +160,18 @@ class Encoder(object):
         return bboxes_in, F.softmax(scores_in, dim=-1)
 
     def decode_batch(self, bboxes_in, scores_in,  criteria = 0.45, max_output=200, device=0):
-        bboxes_in = bboxes_in.to(torch.float32)
-        scores_in = scores_in.to(torch.float32)
+        # bboxes_in: (batchsize, 4, num_bbox) scores_in: (batchsize, label_num, num_bbox)
+        # For example: bboxes_in: (1, 4, 15130) scores_in: (1, 81, 15130)
+        bboxes_in = bboxes_in.permute(0, 2, 1).contiguous().to(torch.float32)
+        scores_in = scores_in.permute(0, 2, 1).contiguous().to(torch.float32)
         if use_optimized_nms:
-            # bboxes_in: (batchsize, 4, num_bbox) scores_in: (batchsize, label_num, num_bbox)
-            # For example: bboxes_in: (1, 4, 15130) scores_in: (1, 81, 15130)
-            #start_time1 = time.time()
-            #bboxes_in = bboxes_in.permute(0, 2, 1).contiguous().to(torch.float32)
-            #scores_in = scores_in.permute(0, 2, 1).contiguous().to(torch.float32)
-            
-            #print("permute time is: {}".format(time.time() - start_time1))
-
             # Do scale and transform from xywh to ltrb
             # bboxes_in: (batchsize, num_bbox, 4) scores_in: (batchsize, num_bbox, label_num)
             # For example: bboxes_in: (1, 15130, 4) scores_in: (1, 15130, 81)
-
-            #start_time2 = time.time()
             bboxes, probs = parallel_scale_back_batch(bboxes_in, scores_in, self.dboxes_xywh, self.scale_xy, self.scale_wh)
-            #print("parallel_scale_back_batch time is: {}".format(time.time() - start_time2))
-
-            # bboxes: (batchsize, num_bbox, 4) scores_in: (batchsize, num_bbox, label_num)
-            # For example: probs: (1, 15130, 4) scores_in: (1, 15130, 81)
-            #start_time3 = time.time()
             output_v2 = batch_score_nms_v2(bboxes, probs, criteria, max_output)
-            #print("batch_score_nms_v2 time is: {}".format(time.time() - start_time3))
+            # Fuse parallel_scale_back_batch and batch_score_nms_v2 together
+            # output_v2 = fused_batch_score_nms(bboxes_in, scores_in, self.dboxes_xywh, self.scale_xy, self.scale_wh, criteria, max_output)
             return output_v2
         else:
             bboxes, probs = self.scale_back_batch(bboxes_in, scores_in,device)

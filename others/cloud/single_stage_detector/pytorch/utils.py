@@ -184,15 +184,17 @@ class Encoder(object):
                     output.append(self.decode_single_ipex(bbox, prob, criteria, max_output))
                 return output
         else:
+            # bboxes_in: (batchsize, 4, num_bbox) scores_in: (batchsize, label_num, num_bbox)
+            # For example: bboxes_in: (1, 4, 15130) scores_in: (1, 81, 15130)
             bboxes_in = bboxes_in.to(torch.float32)
             scores_in = scores_in.permute(0, 2, 1).contiguous().to(torch.float32)
             # Do scale and transform from xywh to ltrb
-            # bboxes_in: (batchsize, 4, num_bbox) scores_in: (batchsize, label_num, num_bbox)
-            # For example: bboxes_in: (1, 4, 15130) scores_in: (1, 81, 15130)
-            # scores_in = scores_in.permute(0, 2, 1).contiguous().to(torch.float32)
+            # bboxes_in: (batchsize, 4, num_bbox) scores_in: (batchsize, num_bbox, label_num)
+            # For example: bboxes_in: (1, 4, 15130) scores_in: (1, 15130, 81)
             bboxes, probs = parallel_scale_back_batch_bbox_last(bboxes_in, scores_in, self.dboxes_xywh, self.scale_xy, self.scale_wh)
             probs = probs.permute(0, 2, 1).contiguous()
-            
+            # bboxes_in: (batchsize, 4, num_bbox) scores_in: (batchsize, label_num, num_bbox)
+            # For example: bboxes_in: (1, 4, 15130) scores_in: (1, 81, 15130)
             output_v3 = batch_score_nms_v3_bbox_last(bboxes, probs, criteria, max_output)
 
             new_result = []

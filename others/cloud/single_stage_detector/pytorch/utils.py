@@ -19,9 +19,11 @@ from math import sqrt, ceil
 
 use_optimized_nms = False
 use_last_dim_bbox = False
+use_ipex = False
 if os.environ.get('USE_IPEX') == "1":
     import intel_pytorch_extension as ipex
     from intel_pytorch_extension import batch_score_nms
+    use_ipex = True
     if os.environ.get('USE_OPTIMIZED_NMS') == "1":
         from intel_pytorch_extension import parallel_scale_back_batch, batch_score_nms_v2, fused_batch_score_nms
         use_optimized_nms = True
@@ -189,7 +191,10 @@ class Encoder(object):
                 for bbox, prob in zip(bboxes.split(1, 0), probs.split(1, 0)):
                     bbox = bbox.squeeze(0)
                     prob = prob.squeeze(0)
-                    output.append(self.decode_single_ipex(bbox, prob, criteria, max_output))
+                    if use_ipex:
+                        output.append(self.decode_single_ipex(bbox, prob, criteria, max_output))
+                    else:
+                        output.append(self.decode_single(bbox, prob, criteria, max_output))
                 return output
         else:
             # bboxes_in: (batchsize, 4, num_bbox) For example: bboxes_in: (1, 4, 15130)
@@ -645,7 +650,6 @@ class COCODetection(data.Dataset):
             bbox_labels.append(bbox_label)
         bbox_sizes = torch.tensor(bbox_sizes)
         bbox_labels =  torch.tensor(bbox_labels)
-
 
         if self.transform != None:
             img, (htot, wtot), bbox_sizes, bbox_labels = \

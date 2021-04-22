@@ -26,7 +26,7 @@ CONFIG_FILE=""
 ARGS=""
 if [ "$1" == "int8" ]; then
     ARGS="$ARGS --int8"
-    CONFIG_FILE="$CONFIG_FILE --configure-dir $3"
+    CONFIG_FILE="$CONFIG_FILE --configure $3"
     echo "### running int8 datatype"
 elif [ "$1" == "bf16" ]; then
     ARGS="$ARGS --autocast"

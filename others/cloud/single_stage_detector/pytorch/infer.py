@@ -258,8 +258,8 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
             print('runing real inputs path')
             if args.autocast:
                 print('bf16 autocast enabled')
-                print('bf16 conv_bn_fusion enabled')
                 if use_ipex:
+                    print('bf16 conv_bn_fusion enabled')
                     model.model = ipex.fx.conv_bn_fuse(model.model)
                 print('enable nhwc')
                 model = model.to(memory_format=torch.channels_last)
@@ -389,6 +389,9 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                             break
                     else:
                         print("OOB Autocast imperative path")
+                        from oob_utils import conv_bn_fuse
+                        print('OOB bf16 conv_bn_fusion enabled')
+                        model.model = conv_bn_fuse(model.model)
                         with torch.cpu.amp.autocast():
                         #with torch.cpu.amp.autocast():
                             for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):

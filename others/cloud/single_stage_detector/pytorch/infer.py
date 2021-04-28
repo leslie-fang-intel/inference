@@ -389,7 +389,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                             break
                     else:
                         print("OOB Autocast imperative path")
-                        with torch.cpu.amp.autocast(enabled=True, dtype=torch.bfloat16):
+                        with torch.cpu.amp.autocast():
                         #with torch.cpu.amp.autocast():
                             for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
                             #for nbatch in range(10):

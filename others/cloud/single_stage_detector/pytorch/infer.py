@@ -263,6 +263,12 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                     model.model = ipex.fx.conv_bn_fuse(model.model)
                 print('enable nhwc')
                 model = model.to(memory_format=torch.channels_last)
+
+                if args.batch_size == 32:
+                    NMS_profile_number = 20
+                else:
+                    NMS_profile_number = 49
+
                 if args.jit:
                     print('enable jit')
                     #model = ipex.optimize(model, dtype=torch.bfloat16, level="O1")
@@ -294,7 +300,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                 end_time = time.time()
 
                             try:
-                                if args.profile and nbatch == 49:
+                                if args.profile and nbatch == NMS_profile_number:
                                     with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
                                        results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
                                     print(prof.key_averages().table(sort_by="self_cpu_time_total"))
@@ -383,8 +389,8 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                             break
                     else:
                         print("OOB Autocast imperative path")
-                        #with torch.amp.autocast(enabled=True, dtype=torch.bfloat16):
-                        with torch.amp.autocast(enabled=True):
+                        with torch.cpu.amp.autocast(enabled=True, dtype=torch.bfloat16):
+                        #with torch.cpu.amp.autocast():
                             for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
                             #for nbatch in range(10):
                             #    img = torch.randn(args.batch_size, 3, 1200, 1200).to(memory_format=torch.channels_last)
@@ -407,8 +413,9 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                     if nbatch >= args.warmup_iterations:
                                         inference_time.update(time.time() - start_time)
                                         end_time = time.time()
-
-                                    with torch.amp.autocast(enabled=False):
+                                    
+                                    #with torch.cpu.amp.autocast(enabled=False):
+                                    with torch.cpu.amp.autocast(enabled=False):
                                         try:
                                             #results = encoder.decode_batch(ploc.to_dense().to(torch.float32), plabel.to_dense().to(torch.float32), 0.50, 200,device=device)
                                             results = encoder.decode_batch(ploc, plabel, 0.50, 200, device=device)

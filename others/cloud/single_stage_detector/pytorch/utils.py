@@ -20,6 +20,7 @@ from math import sqrt, ceil
 use_optimized_nms = False
 use_last_dim_bbox = False
 use_ipex = False
+softmax_optimizaed_in_last_second_dim = False
 if os.environ.get('USE_IPEX') == "1":
     import intel_pytorch_extension as ipex
     from intel_pytorch_extension import batch_score_nms
@@ -30,6 +31,8 @@ if os.environ.get('USE_IPEX') == "1":
         if os.environ.get('USE_LAST_DIM_BBOX') == "1":
             from intel_pytorch_extension import parallel_scale_back_batch_bbox_last, batch_score_nms_v3_bbox_last
             use_last_dim_bbox = True
+            if os.environ.get('USE_MID_DIM_SOFTMAX') == "1":
+                softmax_optimizaed_in_last_second_dim = True
 
 # This function is from https://github.com/kuangliu/pytorch-ssd.
 def calc_iou_tensor(box1, box2):
@@ -166,7 +169,39 @@ class Encoder(object):
         return bboxes_in, F.softmax(scores_in, dim=-1)
 
     def decode_batch(self, bboxes_in, scores_in,  criteria = 0.45, max_output=200, device=0):
-        if not use_last_dim_bbox:
+        if use_last_dim_bbox:
+            if softmax_optimizaed_in_last_second_dim:
+                # bboxes_in: (batchsize, 4, num_bbox) For example: bboxes_in: (1, 4, 15130)
+                # scores_in: (batchsize, label_num, num_bbox) For example: scores_in: (1, 81, 15130)
+                bboxes_in = bboxes_in.to(torch.float32)
+                #scores_in = scores_in.permute(0, 2, 1).contiguous()
+                scores_in = scores_in.to(torch.float32)
+                # Do scale and transform from xywh to ltrb
+                bboxes, probs = parallel_scale_back_batch_bbox_last(bboxes_in, scores_in, self.dboxes_xywh, self.scale_xy, self.scale_wh, -2)
+                #probs = probs.permute(0, 2, 1).contiguous().to(torch.float32)
+                output_v3 = batch_score_nms_v3_bbox_last(bboxes, probs, criteria, max_output)
+            else:
+                # bboxes_in: (batchsize, 4, num_bbox) For example: bboxes_in: (1, 4, 15130)
+                # scores_in: (batchsize, label_num, num_bbox) For example: scores_in: (1, 81, 15130)
+                bboxes_in = bboxes_in.to(torch.float32)
+                #scores_in = scores_in.to(torch.float32)
+                scores_in = scores_in.permute(0, 2, 1).contiguous()
+                # Do scale and transform from xywh to ltrb
+                # bboxes_in: (batchsize, 4, num_bbox) For example: bboxes_in: (1, 4, 15130)
+                # scores_in: (batchsize, num_bbox, label_num) For example: scores_in: (1, 15130, 81)
+                bboxes, probs = parallel_scale_back_batch_bbox_last(bboxes_in, scores_in, self.dboxes_xywh, self.scale_xy, self.scale_wh)
+                probs = probs.permute(0, 2, 1).contiguous().to(torch.float32)
+                #probs = probs.to(torch.float32)
+                # bboxes_in: (batchsize, 4, num_bbox) For example: bboxes_in: (1, 4, 15130)
+                # scores_in: (batchsize, label_num, num_bbox) For example: scores_in: (1, 81, 15130)
+                output_v3 = batch_score_nms_v3_bbox_last(bboxes, probs, criteria, max_output)
+            
+            new_result = []
+            for result in output_v3:
+                loc, label, prob = [r for r in result]
+                new_result.append((loc.permute(1, 0), label, prob))
+            return new_result
+        else:
             if use_optimized_nms:
                 # bboxes_in: (batchsize, 4, num_bbox) For example: bboxes_in: (1, 4, 15130)
                 # scores_in: (batchsize, label_num, num_bbox) For example: scores_in: (1, 81, 15130)
@@ -196,29 +231,6 @@ class Encoder(object):
                     else:
                         output.append(self.decode_single(bbox, prob, criteria, max_output))
                 return output
-        else:
-            # bboxes_in: (batchsize, 4, num_bbox) For example: bboxes_in: (1, 4, 15130)
-            # scores_in: (batchsize, label_num, num_bbox) For example: scores_in: (1, 81, 15130)
-            bboxes_in = bboxes_in.to(torch.float32)
-            #scores_in = scores_in.to(torch.float32)
-            scores_in = scores_in.permute(0, 2, 1).contiguous()
-            # Do scale and transform from xywh to ltrb
-            # bboxes_in: (batchsize, 4, num_bbox) For example: bboxes_in: (1, 4, 15130)
-            # scores_in: (batchsize, num_bbox, label_num) For example: scores_in: (1, 15130, 81)
-            bboxes, probs = parallel_scale_back_batch_bbox_last(bboxes_in, scores_in, self.dboxes_xywh, self.scale_xy, self.scale_wh)
-            probs = probs.permute(0, 2, 1).contiguous().to(torch.float32)
-            #probs = probs.to(torch.float32)
-            # bboxes_in: (batchsize, 4, num_bbox) For example: bboxes_in: (1, 4, 15130)
-            # scores_in: (batchsize, label_num, num_bbox) For example: scores_in: (1, 81, 15130)
-            output_v3 = batch_score_nms_v3_bbox_last(bboxes, probs, criteria, max_output)
-
-            new_result = []
-            for result in output_v3:
-                loc, label, prob = [r for r in result]
-                new_result.append((loc.permute(1, 0), label, prob))
-            
-            #return [loc.permute(1, 0), label, prob]
-            return new_result
     
     # perform non-maximum suppression for IPEX tensor
     def decode_single_ipex(self, bboxes_in, scores_in, criteria, max_output, max_num=200):

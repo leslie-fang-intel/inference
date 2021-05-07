@@ -259,8 +259,10 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
             if args.autocast:
                 print('bf16 autocast enabled')
                 if use_ipex:
-                    print('bf16 conv_bn_fusion enabled')
-                    model.model = ipex.fx.conv_bn_fuse(model.model)
+                    #print('bf16 conv_bn_fusion enabled')
+                    #model.model = ipex.fx.conv_bn_fuse(model.model)
+                    print('bf16 block format weights cache enabled')
+                    model.model = ipex.optimize(model.model, dtype=torch.bfloat16)
                 print('enable nhwc')
                 model = model.to(memory_format=torch.channels_last)
 
@@ -447,8 +449,11 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                                             break
             else:
                 print('autocast disabled, fp32 is used')
-                print('fp32 conv_bn_fusion enabled')
-                model.model = ipex.fx.conv_bn_fuse(model.model)
+                if use_ipex:
+                    #print('fp32 conv_bn_fusion enabled')
+                    #model.model = ipex.fx.conv_bn_fuse(model.model)
+                    print('fp32 block format weights cache enabled')
+                    model.model = ipex.optimize(model.model, dtype=torch.float32)
                 print('enable nhwc')
                 model = model.to(memory_format=torch.channels_last)
                 if args.jit:
@@ -524,6 +529,10 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
         print('decoding latency %.2f ms'%latency)
         print('decodingperformance %.2f fps'%perf)
 
+        total_time_avg = inference_time.avg + decoding_time.avg
+        throughput = batch_size / total_time_avg
+        print("Throughput: {:.3f} fps".format(throughput))
+
         cocoDt = cocoGt.loadRes(np.array(ret))
 
         E = COCOeval(cocoGt, cocoDt, iouType='bbox')
@@ -531,9 +540,13 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
         E.accumulate()
         E.summarize()
         print("Current AP: {:.5f} AP goal: {:.5f}".format(E.stats[0], threshold))
+        print("Accuracy: {:.5f} ".format(E.stats[0]))
 
         return (E.stats[0] >= threshold) #Average Precision  (AP) @[ IoU=050:0.95 | area=   all | maxDets=100 ]
     else:
+        total_time_avg = inference_time.avg
+        throughput = batch_size / total_time_avg
+        print("Throughput: {:.3f} fps".format(throughput))
         return False
 
 def eval_ssd_r34_mlperf_coco(args):

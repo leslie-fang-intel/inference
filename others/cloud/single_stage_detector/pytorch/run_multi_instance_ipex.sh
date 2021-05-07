@@ -65,7 +65,7 @@ for i in $(seq 1 $LAST_INSTANCE); do
     numa_node_i=`expr $i / $INSTANCES_PER_SOCKET`
     start_core_i=`expr $i \* $CORES_PER_INSTANCE`
     end_core_i=`expr $start_core_i + $CORES_PER_INSTANCE - 1`
-    LOG_i=inference_cpu_bs${BATCH_SIZE}_ins${i}.txt
+    LOG_i=throughput_log_bs${BATCH_SIZE}_ins${i}.txt
 
     echo "### running on instance $i, numa node $numa_node_i, core list {$start_core_i, $end_core_i}..."
     numactl --physcpubind=$start_core_i-$end_core_i --membind=$numa_node_i python -u infer.py $ARGS \
@@ -76,7 +76,7 @@ done
 numa_node_0=0
 start_core_0=0
 end_core_0=`expr $CORES_PER_INSTANCE - 1`
-LOG_0=inference_cpu_bs${BATCH_SIZE}_ins0.txt
+LOG_0=throughput_log_bs${BATCH_SIZE}_ins0.txt
 
 echo "### running on instance 0, numa node $numa_node_0, core list {$start_core_0, $end_core_0}...\n\n"
 numactl --physcpubind=$start_core_0-$end_core_0 --membind=$numa_node_0 python -u infer.py $ARGS \
@@ -84,8 +84,17 @@ numactl --physcpubind=$start_core_0-$end_core_0 --membind=$numa_node_0 python -u
     -b $BATCH_SIZE $CONFIG_FILE 2>&1 | tee $LOG_0
 
 sleep 10
-echo -e "\n\n Sum sentences/s together:"
-for i in $(seq 0 $LAST_INSTANCE); do
-    log=inference_cpu_bs${BATCH_SIZE}_ins${i}.txt
-    tail -n 2 $log
-done
+throughput=$(grep 'Throughput:' ./throughput_log* |sed -e 's/.*Throughput//;s/[^0-9.]//g' |awk '
+BEGIN {
+        sum = 0;
+i = 0;
+      }
+      {
+        sum = sum + $1;
+i++;
+      }
+END   {
+sum = sum / i;
+        printf("%.3f", sum);
+}')
+echo ""SSD-RN34";"throughput";$1; ${BATCH_SIZE};${throughput}" | tee -a ${work_space}/summary.log

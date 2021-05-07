@@ -51,4 +51,19 @@ if [ -n "$5" ]; then
     ARGS="$ARGS --iter $5"
 fi
 
-python infer.py --seed 1 --threshold 0.2 -b $BATCH_SIZE -j 0 --data $DATA_DIR --device 0 --checkpoint $MODEL_DIR --no-cuda $ARGS $CONFIG_FILE
+CORES=`lscpu | grep Core | awk '{print $4}'`
+SOCKETS=`lscpu | grep Socket | awk '{print $2}'`
+TOTAL_CORES=`expr $CORES \* $SOCKETS`
+CORES_PER_INSTANCE=$CORES
+
+INSTANCES=`expr $TOTAL_CORES / $CORES_PER_INSTANCE`
+LAST_INSTANCE=`expr $INSTANCES - 1`
+INSTANCES_PER_SOCKET=`expr $INSTANCES / $SOCKETS`
+
+numa_node_i=0
+start_core_i=0
+end_core_i=`expr $start_core_i + $CORES_PER_INSTANCE - 1`
+
+numactl --physcpubind=$start_core_i-$end_core_i --membind=$numa_node_i python infer.py --seed 1 --threshold 0.2 -b $BATCH_SIZE -j 0 --data $DATA_DIR --device 0 --checkpoint $MODEL_DIR --no-cuda $ARGS $CONFIG_FILE 2>&1 | tee accuracy_log.txt
+accuracy=$(grep 'Accuracy:' ./accuracy_log* |sed -e 's/.*Accuracy//;s/[^0-9.]//g')
+echo ""SSD-RN34";"accuracy";$1; ${BATCH_SIZE};${accuracy}" | tee -a ${work_space}/summary.log

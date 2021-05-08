@@ -23,16 +23,13 @@ use_ipex = False
 softmax_optimizaed_in_last_second_dim = False
 if os.environ.get('USE_IPEX') == "1":
     import intel_pytorch_extension as ipex
-    from intel_pytorch_extension import batch_score_nms
+    from intel_pytorch_extension import batch_score_nms, parallel_scale_back_batch
     use_ipex = True
-    if os.environ.get('USE_OPTIMIZED_NMS') == "1":
-        from intel_pytorch_extension import parallel_scale_back_batch, batch_score_nms_v2, fused_batch_score_nms
-        use_optimized_nms = True
-        if os.environ.get('USE_LAST_DIM_BBOX') == "1":
-            from intel_pytorch_extension import parallel_scale_back_batch_bbox_last, batch_score_nms_v3_bbox_last
-            use_last_dim_bbox = True
-            if os.environ.get('USE_MID_DIM_SOFTMAX') == "1":
-                softmax_optimizaed_in_last_second_dim = True
+    if os.environ.get('USE_LAST_DIM_BBOX') == "1":
+        from intel_pytorch_extension import parallel_scale_back_batch_bbox_last, batch_score_nms_v3_bbox_last
+        use_last_dim_bbox = True
+        if os.environ.get('USE_MID_DIM_SOFTMAX') == "1":
+            softmax_optimizaed_in_last_second_dim = True
 
 # This function is from https://github.com/kuangliu/pytorch-ssd.
 def calc_iou_tensor(box1, box2):
@@ -202,23 +199,14 @@ class Encoder(object):
                 new_result.append((loc.permute(1, 0), label, prob))
             return new_result
         else:
-            if use_optimized_nms:
-                # bboxes_in: (batchsize, 4, num_bbox) For example: bboxes_in: (1, 4, 15130)
-                # scores_in: (batchsize, label_num, num_bbox) For example: scores_in: (1, 81, 15130)
+            if use_ipex:
                 bboxes_in = bboxes_in.permute(0, 2, 1).contiguous().to(torch.float32)
-                scores_in = scores_in.permute(0, 2, 1).contiguous()
-                # Do scale and transform from xywh to ltrb
-                # bboxes_in: (batchsize, num_bbox, 4) For example: bboxes_in: (1, 15130, 4)
-                # scores_in: (batchsize, num_bbox, label_num) For example: scores_in: (1, 15130, 81)
+                scores_in = scores_in.permute(0, 2, 1).contiguous().to(torch.float32)
+                #bboxes, probs = self.scale_back_batch(bboxes_in, scores_in,device)
                 bboxes, probs = parallel_scale_back_batch(bboxes_in, scores_in, self.dboxes_xywh, self.scale_xy, self.scale_wh)
-                probs = probs.to(torch.float32)
-                output_v2 = batch_score_nms_v2(bboxes, probs, criteria, max_output)
-                # Fuse parallel_scale_back_batch and batch_score_nms_v2 together
-                # output_v2 = fused_batch_score_nms(bboxes_in, scores_in, self.dboxes_xywh, self.scale_xy, self.scale_wh, criteria, max_output)
-                return output_v2
+                output = batch_score_nms(bboxes, probs, criteria, max_output)
+                return output
             else:
-                # bboxes_in: (batchsize, 4, num_bbox) For example: bboxes_in: (1, 4, 15130)
-                # scores_in: (batchsize, label_num, num_bbox) For example: scores_in: (1, 81, 15130)
                 bboxes_in = bboxes_in.permute(0, 2, 1).contiguous().to(torch.float32)
                 scores_in = scores_in.permute(0, 2, 1).contiguous().to(torch.float32)
                 bboxes, probs = self.scale_back_batch(bboxes_in, scores_in,device)
@@ -226,10 +214,7 @@ class Encoder(object):
                 for bbox, prob in zip(bboxes.split(1, 0), probs.split(1, 0)):
                     bbox = bbox.squeeze(0)
                     prob = prob.squeeze(0)
-                    if use_ipex:
-                        output.append(self.decode_single_ipex(bbox, prob, criteria, max_output))
-                    else:
-                        output.append(self.decode_single(bbox, prob, criteria, max_output))
+                    output.append(self.decode_single(bbox, prob, criteria, max_output))
                 return output
     
     # perform non-maximum suppression for IPEX tensor

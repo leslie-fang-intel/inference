@@ -187,10 +187,11 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                             
                     if args.profile and nbatch == 99:
                         print("Profilling")
-                        with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                        #with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                        with torch.profiler.profile(on_trace_ready=torch.profiler.tensorboard_trace_handler("./int8_log")) as prof:
                             ploc, plabel = model(img)
                         print(prof.key_averages().table(sort_by="self_cpu_time_total"))
-                        prof.export_chrome_trace("torch_int8_throughput.json")
+                        #prof.export_chrome_trace("torch_int8_throughput.json")
                     else:
                         ploc, plabel = model(img)
 
@@ -244,10 +245,11 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                             start_time=time.time()
                         if nbatch == 5:
                             print("Profilling")
-                            with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                            #with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                            with torch.profiler.profile(on_trace_ready=torch.profiler.tensorboard_trace_handler("./fp32_dummy_log")) as prof:
                                 ploc, plabel,_ = model(img)
                             print(prof.key_averages().table(sort_by="self_cpu_time_total"))
-                            prof.export_chrome_trace("torch_throughput.json")
+                            #prof.export_chrome_trace("torch_throughput.json")
                         else:
                             ploc, plabel,_ = model(img)
                         if nbatch >= args.warmup_iterations:
@@ -291,10 +293,11 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                             img = img.to(memory_format=torch.channels_last)
                             if args.profile and nbatch == 99:
                                 print("Profilling")
-                                with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                #with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                with torch.profiler.profile(on_trace_ready=torch.profiler.tensorboard_trace_handler("./log")) as prof:
                                     ploc, plabel = model(img)
                                 print(prof.key_averages().table(sort_by="self_cpu_time_total"))
-                                prof.export_chrome_trace("torch_throughput.json")
+                                #prof.export_chrome_trace("torch_throughput.json")
                             else:
                                 ploc, plabel = model(img)
                             if nbatch >= args.warmup_iterations:
@@ -303,10 +306,11 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
 
                             try:
                                 if args.profile and nbatch == NMS_profile_number:
-                                    with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                    #with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                    with torch.profiler.profile(on_trace_ready=torch.profiler.tensorboard_trace_handler("./decode_log")) as prof:
                                        results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
                                     print(prof.key_averages().table(sort_by="self_cpu_time_total"))
-                                    prof.export_chrome_trace("torch_decode_throughput.json")
+                                    #prof.export_chrome_trace("torch_decode_throughput.json")
                                 else:
                                     results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
                             except:
@@ -351,10 +355,11 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
 
                                     if args.profile and nbatch == 100:
                                         print("Profilling")
-                                        with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                        #with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                        with torch.profiler.profile(on_trace_ready=torch.profiler.tensorboard_trace_handler("./bf16_imperative_log")) as prof:
                                             ploc, plabel = model(img)
                                         print(prof.key_averages().table(sort_by="self_cpu_time_total"))
-                                        prof.export_chrome_trace("torch_throughput.json")
+                                        #prof.export_chrome_trace("torch_throughput.json")
                                     else:
                                         ploc, plabel = model(img)
 
@@ -408,10 +413,11 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
 
                                     if args.profile and nbatch == 100:
                                         print("Profilling")
-                                        with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                        #with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                        with torch.profiler.profile(on_trace_ready=torch.profiler.tensorboard_trace_handler("./bf16_oob_log")) as prof:
                                             ploc, plabel = model(img)
                                         print(prof.key_averages().table(sort_by="self_cpu_time_total"))
-                                        prof.export_chrome_trace("torch_throughput.json")
+                                        #prof.export_chrome_trace("torch_throughput.json")
                                     else:
                                         ploc, plabel = model(img)
 
@@ -474,10 +480,11 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                         img = img.contiguous(memory_format=torch.channels_last)
                         if args.profile and nbatch == 100:
                             print("Profilling")
-                            with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                            #with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                            with torch.profiler.profile(on_trace_ready=torch.profiler.tensorboard_trace_handler("./fp32_log")) as prof:
                                 ploc, plabel = model(img)
                             print(prof.key_averages().table(sort_by="self_cpu_time_total"))
-                            prof.export_chrome_trace("torch_throughput.json")
+                            #prof.export_chrome_trace("torch_throughput.json")
                         else:
                             ploc, plabel = model(img)
                         if nbatch >= args.warmup_iterations:
@@ -485,10 +492,10 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                             end_time = time.time()
                         try:
                             if args.profile and nbatch == 49:
-                                with torch.autograd.profiler.profile(use_cuda=False, record_shapes=True) as prof:
+                                with torch.profiler.profile(on_trace_ready=torch.profiler.tensorboard_trace_handler("./fp32_decode_log")) as prof:
                                     results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
                                 print(prof.key_averages().table(sort_by="self_cpu_time_total"))
-                                prof.export_chrome_trace("torch_fp32_decode_throughput.json")
+                                #prof.export_chrome_trace("torch_fp32_decode_throughput.json")
                             else:
                                 results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)
                             #results = encoder.decode_batch(ploc, plabel, 0.50, 200,device=device)

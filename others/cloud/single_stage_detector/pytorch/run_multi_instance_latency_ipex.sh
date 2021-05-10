@@ -69,7 +69,7 @@ for i in $(seq 1 $LAST_INSTANCE); do
 
     echo "### running on instance $i, numa node $numa_node_i, core list {$start_core_i, $end_core_i}..."
     numactl --physcpubind=$start_core_i-$end_core_i --membind=$numa_node_i python -u infer.py $ARGS \
-        --data $DATA_DIR --device 0 --checkpoint $MODEL_DIR -w 10 -j 0 --no-cuda --iteration 100 \
+        --data $DATA_DIR --device 0 --checkpoint $MODEL_DIR -w 20 -j 0 --no-cuda --iteration 200 \
         -b $BATCH_SIZE $CONFIG_FILE 2>&1 | tee $LOG_i &
 done
 
@@ -80,11 +80,11 @@ LOG_0=lantency_log_bs${BATCH_SIZE}_ins0.txt
 
 echo "### running on instance 0, numa node $numa_node_0, core list {$start_core_0, $end_core_0}...\n\n"
 numactl --physcpubind=$start_core_0-$end_core_0 --membind=$numa_node_0 python -u infer.py $ARGS \
-    --data $DATA_DIR --device 0 --checkpoint $MODEL_DIR -w 10 -j 0 --no-cuda --iteration 100 \
+    --data $DATA_DIR --device 0 --checkpoint $MODEL_DIR -w 20 -j 0 --no-cuda --iteration 200 \
     -b $BATCH_SIZE $CONFIG_FILE 2>&1 | tee $LOG_0
 
 sleep 10
-throughput=$(grep 'Throughput:' ./lantency_log* |sed -e 's/.*Throughput//;s/[^0-9.]//g' |awk '
+throughput=$(grep 'Throughput:' ./lantency_log* |sed -e 's/.*Throughput//;s/[^0-9.]//g' |awk -v INSTANCES_PER_SOCKET=$INSTANCES_PER_SOCKET '
 BEGIN {
         sum = 0;
 i = 0;
@@ -94,7 +94,7 @@ i = 0;
 i++;
       }
 END   {
-sum = sum / i * $INSTANCES_PER_SOCKET;
+sum = sum / i * INSTANCES_PER_SOCKET;
         printf("%.2f", sum);
 }')
 echo ""SSD-RN34";"lantency";$1; ${BATCH_SIZE};${throughput}" | tee -a ${work_space}/summary.log

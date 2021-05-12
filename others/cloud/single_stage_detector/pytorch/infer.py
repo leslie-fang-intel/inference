@@ -275,8 +275,8 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
 
                 if args.jit:
                     print('enable jit')
-                    #model = ipex.optimize(model, dtype=torch.bfloat16, level="O1")
-                    with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)), torch.no_grad(): 
+                    with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)), torch.no_grad():
+                    #with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16), whitelist_removed=["gelu", "conv2d"]), torch.no_grad():
                         model = torch.jit.trace(model, torch.randn(args.batch_size, 3, 1200, 1200).to(memory_format=torch.channels_last)).eval()
                     model = torch.jit.freeze(model)
                     for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
@@ -340,6 +340,7 @@ def coco_eval(model, val_dataloader, cocoGt, encoder, inv_map, args):
                     if use_ipex:
                         print('Ipex Autocast imperative path')
                         with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16)):
+                        #with ipex.amp.autocast(enabled=True, configure=ipex.conf.AmpConf(torch.bfloat16), whitelist_removed=["gelu", "conv2d"]):
                             for nbatch, (img, img_id, img_size, bbox, label) in enumerate(val_dataloader):
                                 #print("nbatch: {}".format(nbatch))
                                 with torch.no_grad():
